@@ -1,0 +1,10 @@
+# Stretch goal (plan Phase 4, step 11): FetchPickAndPlace — only after
+# FetchPush is solid and reproducible. Identical recipe; grasping adds a
+# contact mode Push lacks.
+env_id: FetchPickAndPlace-v4
+total_env_steps: 1000000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+device: cpu
+run_dir: results/pickplace_td3_her
