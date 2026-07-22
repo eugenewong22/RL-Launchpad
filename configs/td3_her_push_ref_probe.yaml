@@ -1,0 +1,22 @@
+# Hypothesis probe #2 (after probe #1 — exploration alone — was
+# rejected). Evidence: the 1M-run actor SATURATED (mean |action| = 1.0,
+# gripper slammed ~1.6m from the block every episode). Package under
+# test = the OpenAI-baselines-HER stabilizers our setup lacked:
+#   - action_l2 = 1.0        (anti-saturation actor penalty)
+#   - normalize_obs = true   (running obs/goal normalization, clip ±5)
+#   - tau = 0.05             (reference target-update rate, 10x ours)
+# plus the sustained exploration from probe #1 (eps=0.3, noise=0.2).
+# Pre-declared criterion: eval success clearly above the 0.05 eval-seed
+# floor and rising by 300k steps.
+env_id: FetchPush-v4
+total_env_steps: 300000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+expl_noise: 0.2
+random_eps: 0.3
+action_l2: 1.0
+normalize_obs: true
+tau: 0.05
+device: cpu
+run_dir: results/probe_ref

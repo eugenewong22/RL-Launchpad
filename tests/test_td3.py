@@ -82,6 +82,23 @@ def test_target_networks_polyak_track_online_networks():
         assert torch.allclose(p_new, expected, atol=1e-6)
 
 
+def test_action_l2_penalty_shrinks_action_magnitudes():
+    # Same seed, same batches; the only difference is the L2 penalty on
+    # actions in the actor loss. The penalized agent's actor must produce
+    # smaller-magnitude actions -> the anti-saturation stabilizer works.
+    batch = make_batch()
+    plain = make_agent(policy_delay=1, action_l2=0.0)
+    penalized = make_agent(policy_delay=1, action_l2=10.0)
+    for _ in range(100):
+        plain.train_step(batch)
+        penalized.train_step(batch)
+    state = batch[0]
+    with torch.no_grad():
+        mag_plain = plain.actor(state).abs().mean().item()
+        mag_pen = penalized.actor(state).abs().mean().item()
+    assert mag_pen < mag_plain * 0.7, (mag_plain, mag_pen)
+
+
 def test_save_load_roundtrip(tmp_path):
     agent = make_agent()
     agent.train_step(make_batch())

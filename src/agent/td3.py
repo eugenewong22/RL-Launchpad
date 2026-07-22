@@ -34,6 +34,7 @@ class TD3:
         noise_clip: float = 0.5,
         policy_delay: int = 2,
         lr: float = 1e-3,
+        action_l2: float = 0.0,
         device: str = "cpu",
         seed: int = 0,
     ):
@@ -41,6 +42,7 @@ class TD3:
         self.gamma, self.tau = gamma, tau
         self.policy_noise, self.noise_clip = policy_noise, noise_clip
         self.policy_delay = policy_delay
+        self.action_l2 = action_l2
         self.max_action = max_action
         self.device = device
         self.rng = np.random.default_rng(seed)
@@ -87,7 +89,15 @@ class TD3:
         metrics = {"critic_loss": critic_loss.item(), "q1_mean": q1.mean().item()}
 
         if self.train_steps % self.policy_delay == 0:
-            actor_loss = -self.critic.q1(state, self.actor(state)).mean()
+            pi = self.actor(state)
+            # L2 penalty on actions (baselines-HER `action_l2`): the
+            # anti-saturation stabilizer — without it, sparse rewards let
+            # the actor climb a garbage critic surface to the tanh bounds
+            # and pin there with vanishing gradients.
+            actor_loss = (
+                -self.critic.q1(state, pi).mean()
+                + self.action_l2 * (pi / self.max_action).pow(2).mean()
+            )
             self.actor_opt.zero_grad()
             actor_loss.backward()
             self.actor_opt.step()

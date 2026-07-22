@@ -15,8 +15,7 @@ import gymnasium_robotics  # noqa: F401
 import numpy as np
 import yaml
 
-from src.agent.evaluate import concat_obs, evaluate
-from src.agent.td3 import TD3
+from src.agent.evaluate import evaluate, load_policy
 
 
 def load_policy_fn(run_dir: Path, env_id: str):
@@ -25,15 +24,7 @@ def load_policy_fn(run_dir: Path, env_id: str):
     pt = run_dir / "checkpoint_best.pt"
     zp = run_dir / "checkpoint_latest.zip"
     if pt.exists():
-        env = gym.make(env_id)
-        obs, _ = env.reset(seed=0)
-        state_dim = obs["observation"].shape[0] + obs["desired_goal"].shape[0]
-        act_dim = env.action_space.shape[0]
-        max_action = float(env.action_space.high[0])
-        env.close()
-        agent = TD3(state_dim, act_dim, max_action=max_action)
-        agent.load(pt)
-        return lambda obs: agent.select_action(concat_obs(obs), noise_std=0.0), "from-scratch"
+        return load_policy(pt, env_id), "from-scratch"
     if zp.exists():
         from stable_baselines3 import TD3 as SB3TD3
 

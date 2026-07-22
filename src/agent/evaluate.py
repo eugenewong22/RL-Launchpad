@@ -17,6 +17,35 @@ def concat_obs(obs: dict) -> np.ndarray:
     return np.concatenate([obs["observation"], obs["desired_goal"]], dtype=np.float32)
 
 
+def load_policy(checkpoint_path, env_id: str):
+    """Build a deterministic policy_fn from a from-scratch checkpoint,
+    loading the run's normalizer.npz (if present, from the same
+    directory) — normalization stats are part of the learned artifact."""
+    from pathlib import Path
+
+    from src.agent.td3 import TD3
+
+    env = gym.make(env_id)
+    obs, _ = env.reset(seed=0)
+    state_dim = obs["observation"].shape[0] + obs["desired_goal"].shape[0]
+    act_dim = env.action_space.shape[0]
+    max_action = float(env.action_space.high[0])
+    env.close()
+
+    agent = TD3(state_dim, act_dim, max_action=max_action)
+    agent.load(checkpoint_path)
+
+    norm_path = Path(checkpoint_path).parent / "normalizer.npz"
+    if norm_path.exists():
+        from src.agent.normalizer import RunningNormalizer
+
+        normalizer = RunningNormalizer.load(norm_path)
+        return lambda obs: agent.select_action(
+            normalizer.normalize(concat_obs(obs)), noise_std=0.0
+        )
+    return lambda obs: agent.select_action(concat_obs(obs), noise_std=0.0)
+
+
 def evaluate(policy_fn, env_id: str, n_episodes: int, eval_seed_base: int) -> dict:
     """policy_fn maps the raw goal-conditioned obs dict to an action.
 
@@ -56,18 +85,7 @@ def main():
     parser.add_argument("--eval-seed-base", type=int, default=10_000)
     args = parser.parse_args()
 
-    from src.agent.td3 import TD3
-
-    env = gym.make(args.env_id)
-    obs, _ = env.reset(seed=0)
-    state_dim = obs["observation"].shape[0] + obs["desired_goal"].shape[0]
-    act_dim = env.action_space.shape[0]
-    max_action = float(env.action_space.high[0])
-    env.close()
-
-    agent = TD3(state_dim, act_dim, max_action=max_action)
-    agent.load(args.checkpoint)
-    policy_fn = lambda obs: agent.select_action(concat_obs(obs), noise_std=0.0)
+    policy_fn = load_policy(args.checkpoint, args.env_id)
     result = evaluate(policy_fn, args.env_id, args.episodes, args.eval_seed_base)
     print(
         f"{args.env_id}: success_rate={result['success_rate']:.3f} "

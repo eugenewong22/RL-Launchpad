@@ -28,6 +28,8 @@ def test_short_training_run_writes_log_and_checkpoint(tmp_path):
         warmup_steps=100,
         eval_every=150,
         n_eval_episodes=2,
+        normalize_obs=True,
+        action_l2=1.0,
         run_dir=str(tmp_path / "run"),
         seed=0,
     )
@@ -43,3 +45,5 @@ def test_short_training_run_writes_log_and_checkpoint(tmp_path):
 
     assert (tmp_path / "run" / "checkpoint_latest.pt").exists()
     assert (tmp_path / "run" / "config.yaml").exists()
+    # normalization stats are part of the learned artifact (eval needs them)
+    assert (tmp_path / "run" / "normalizer.npz").exists()

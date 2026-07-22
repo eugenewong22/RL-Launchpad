@@ -18,6 +18,7 @@ import numpy as np
 import yaml
 
 from src.agent.evaluate import concat_obs, evaluate
+from src.agent.normalizer import RunningNormalizer
 from src.agent.replay_buffer import HerReplayBuffer
 from src.agent.td3 import TD3
 
@@ -38,6 +39,8 @@ class TrainConfig:
     policy_noise: float = 0.2
     noise_clip: float = 0.5
     policy_delay: int = 2
+    action_l2: float = 0.0  # actor-loss L2 penalty on actions (anti-saturation)
+    normalize_obs: bool = False  # running obs/goal normalization (baselines-HER style)
     eval_every: int = 5_000  # env steps between evals
     n_eval_episodes: int = 20  # in-training eval; final eval uses 50 (R4)
     eval_seed_base: int = 10_000
@@ -94,9 +97,12 @@ def run_training(cfg: TrainConfig) -> dict:
         noise_clip=cfg.noise_clip,
         policy_delay=cfg.policy_delay,
         lr=cfg.lr,
+        action_l2=cfg.action_l2,
         device=device,
         seed=cfg.seed,
     )
+    normalizer = RunningNormalizer(dim=obs_dim + goal_dim) if cfg.normalize_obs else None
+    norm = (lambda x: normalizer.normalize(x)) if normalizer else (lambda x: x)
     reward_fn = lambda ag, g: env.unwrapped.compute_reward(ag, g, {})
     buffer = HerReplayBuffer(
         capacity=cfg.buffer_capacity,
@@ -137,7 +143,7 @@ def run_training(cfg: TrainConfig) -> dict:
                 action = env.action_space.sample()
             else:
                 action = behavior_action(
-                    agent, env.action_space, concat_obs(obs),
+                    agent, env.action_space, norm(concat_obs(obs)),
                     cfg.expl_noise, cfg.random_eps, explore_rng,
                 )
             ep_des[t], ep_act[t] = obs["desired_goal"], action
@@ -145,16 +151,19 @@ def run_training(cfg: TrainConfig) -> dict:
             ep_obs[t + 1], ep_ach[t + 1] = obs["observation"], obs["achieved_goal"]
             env_steps += 1
         buffer.add_episode(ep_obs, ep_ach, ep_des, ep_act)
+        if normalizer is not None:
+            normalizer.update(np.concatenate([ep_obs[:T], ep_des], axis=1))
 
         # ---- one gradient step per env step, after warmup ----
         if env_steps >= cfg.warmup_steps:
             for _ in range(T):
-                metrics = agent.train_step(buffer.sample(cfg.batch_size))
+                state, action_b, reward, next_state = buffer.sample(cfg.batch_size)
+                metrics = agent.train_step((norm(state), action_b, reward, norm(next_state)))
                 recent_losses.append(metrics["critic_loss"])
 
         # ---- periodic eval ----
         if env_steps >= next_eval or env_steps >= cfg.total_env_steps:
-            policy_fn = lambda o: agent.select_action(concat_obs(o), noise_std=0.0)
+            policy_fn = lambda o: agent.select_action(norm(concat_obs(o)), noise_std=0.0)
             result = evaluate(policy_fn, cfg.env_id, cfg.n_eval_episodes, cfg.eval_seed_base)
             last_result = result
             wall = time.monotonic() - start
@@ -169,6 +178,8 @@ def run_training(cfg: TrainConfig) -> dict:
                 f"success={result['success_rate']:.2f} loss={mean_loss:.4f} wall={wall:.0f}s"
             )
             agent.save(run_dir / "checkpoint_latest.pt")
+            if normalizer is not None:
+                normalizer.save(run_dir / "normalizer.npz")
             if result["success_rate"] >= best_success:
                 best_success = result["success_rate"]
                 agent.save(run_dir / "checkpoint_best.pt")

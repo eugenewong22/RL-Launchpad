@@ -14,8 +14,7 @@ import gymnasium_robotics  # noqa: F401
 import imageio
 import numpy as np
 
-from src.agent.evaluate import concat_obs
-from src.agent.td3 import TD3
+from src.agent.evaluate import load_policy
 
 
 def main():
@@ -29,17 +28,14 @@ def main():
     args = parser.parse_args()
 
     env = gym.make(args.env_id, render_mode="rgb_array")
-    obs, _ = env.reset(seed=0)
-    state_dim = obs["observation"].shape[0] + obs["desired_goal"].shape[0]
-    agent = TD3(state_dim, env.action_space.shape[0], max_action=float(env.action_space.high[0]))
-    agent.load(args.checkpoint)
+    policy_fn = load_policy(args.checkpoint, args.env_id)
 
     frames, successes = [], []
     for i in range(args.episodes):
         obs, _ = env.reset(seed=args.eval_seed_base + i)
         while True:
             frames.append(env.render())
-            action = agent.select_action(concat_obs(obs), noise_std=0.0)
+            action = policy_fn(obs)
             obs, _, terminated, truncated, info = env.step(action)
             if terminated or truncated:
                 successes.append(float(info.get("is_success", 0.0)))
