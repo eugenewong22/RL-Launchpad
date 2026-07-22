@@ -1,12 +1,12 @@
-# SB3 SAC+HER baseline probe: SAC's entropy-driven exploration sidesteps
-# the deterministic-actor saturation failure, making it SB3's best fair
-# shot at FetchPush out of the box. 300k local probe before joining the
-# cluster matrix.
+# SB3 SAC+HER baseline (R2 second library arm): SAC's entropy-driven
+# exploration sidesteps the deterministic-actor saturation failure that
+# flattens out-of-the-box TD3 here, making it SB3's best fair shot on
+# FetchPush. Same task/obs/action/eval protocol as every other arm.
 env_id: FetchPush-v4
 algo: sac
-total_env_steps: 300000
+total_env_steps: 1000000
 eval_every: 10000
 n_eval_episodes: 20
 her_k: 4
 tau: 0.05
-run_dir: results/probe_sb3_sac
+run_dir: results/push_sb3_sac

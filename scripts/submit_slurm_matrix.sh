@@ -44,4 +44,6 @@ for seed in 0 1 2; do
     uv run python -m src.agent.train --config configs/td3_noher_push.yaml --seed "$seed"
   submit "results/push_sb3_her_seed$seed" \
     uv run python -m src.baseline.train_sb3 --config configs/sb3_td3_her_push.yaml --seed "$seed"
+  submit "results/push_sb3_sac_seed$seed" \
+    uv run python -m src.baseline.train_sb3 --config configs/sb3_sac_her_push.yaml --seed "$seed"
 done
