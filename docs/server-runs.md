@@ -14,25 +14,19 @@ cores.
 ssh <your-username>@xlogin1.comp.nus.edu.sg   # adjust hostname if different
 ```
 
-## 2. One-time setup (on the login node — it's the one with internet)
+## 2. Install uv and clone
 
-Compute nodes on most SLURM clusters (NUS SoC included) have **no
-internet access**, so `uv sync` must run on the login node first; the
-resulting `.venv` is then reused by every submitted job.
+`uv` itself (and cloning) are lightweight enough for the login node:
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh    # installs uv to ~/.local/bin
-source ~/.bashrc                                    # or restart the shell, so `uv` is on PATH
+python3 -m venv ~/.venvs/bootstrap        # if `pip install --user uv` errors with
+~/.venvs/bootstrap/bin/pip install uv     # "externally-managed-environment"
+echo 'export PATH="$HOME/.venvs/bootstrap/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+uv --version
 
-# The repo is public — plain HTTPS clone, no token/SSH-key setup needed.
-# (If it's ever made private: a fine-grained PAT scoped to this repo with
-# Contents: Read-only is enough — nothing in this workflow pushes from
-# the cluster, results come home via rsync.)
+# Public repo — plain HTTPS clone, no token/SSH-key setup needed.
 git clone https://github.com/eugenewong22/RL-Launchpad.git launchpad-rl
 cd launchpad-rl
-
-uv sync        # fetches pinned Python 3.11 + all deps into .venv (needs internet)
-uv run pytest  # 17 tests should pass before spending any cluster-hours
 ```
 
 ## 3. Find your partition name
@@ -41,7 +35,34 @@ uv run pytest  # 17 tests should pass before spending any cluster-hours
 sinfo   # lists partitions; pick a CPU partition (e.g. "cpu", "long", "normal")
 ```
 
-## 4. Submit the matrix
+## 4. Run `uv sync` + tests — NOT directly on the login node
+
+`uv sync` (dependency resolution) and `pytest` (imports torch) need more
+memory than shared login nodes typically allow per process — symptom:
+`memory allocation of N bytes failed` / `Aborted (core dumped)`. Submit
+this as its own compute-node job instead:
+
+```bash
+mkdir -p logs
+sbatch --job-name=setup --partition=<name-from-sinfo> --cpus-per-task=2 --mem=4G \
+    --time=00:30:00 --chdir="$PWD" --output=logs/setup.out \
+    --wrap="bash scripts/setup_cluster.sh"
+squeue -u $USER            # wait for it to finish
+cat logs/setup.out         # should end with "17 passed"
+```
+
+If `logs/setup.out` shows a network error instead (compute nodes with no
+internet), reuse the package cache your laptop already built locally
+rather than fetching on the cluster at all:
+
+```bash
+# from your laptop:
+rsync -av ~/.cache/uv/ <your-username>@xlogin1.comp.nus.edu.sg:~/.cache/uv/
+# then on the cluster:
+uv sync --offline && uv run pytest
+```
+
+## 5. Submit the matrix
 
 `scripts/submit_slurm_matrix.sh` submits one `sbatch` job per missing
 run (skips any `results/<run>/` that already exists, so it's safe to
