@@ -1,0 +1,8 @@
+# Ablation arm: identical to td3_her_push.yaml except HER disabled.
+env_id: FetchPush-v4
+total_env_steps: 1000000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 0  # the one-flag ablation
+device: cpu  # keep identical to td3_her_push.yaml apart from her_k
+run_dir: results/push_td3_noher

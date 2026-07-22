@@ -1,0 +1,9 @@
+# FetchReach smoke test — correctness gate before any FetchPush compute.
+# Expect >=90% success within ~50k env steps.
+env_id: FetchReach-v4
+total_env_steps: 50000
+eval_every: 2500
+n_eval_episodes: 10
+her_k: 4
+device: cpu  # tiny MLPs: CPU beats GPU dispatch overhead at this scale
+run_dir: results/reach_smoke

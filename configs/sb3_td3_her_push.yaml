@@ -1,0 +1,7 @@
+# SB3 TD3+HER baseline on FetchPush (R2 comparison arm).
+env_id: FetchPush-v4
+total_env_steps: 1000000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+run_dir: results/push_sb3_her

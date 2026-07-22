@@ -1,0 +1,8 @@
+# Primary reported result: from-scratch TD3+HER on FetchPush.
+env_id: FetchPush-v4
+total_env_steps: 1000000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+device: cpu  # 256-wide MLPs: CPU beats GPU dispatch overhead; set cuda on a GPU box if desired
+run_dir: results/push_td3_her
