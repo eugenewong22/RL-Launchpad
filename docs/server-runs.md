@@ -1,55 +1,74 @@
-# Running the experiment matrix on a remote (school) server
+# Running the experiment matrix on the school (SLURM) cluster
 
-Training is CPU-only and headless — no GPU, no display, no rendering
-libraries needed. The repo is self-contained: `uv` fetches the pinned
-Python and all locked dependencies. Wall-clock differs across hardware;
-that is fine under R6 as long as it's reported, and `progress.csv`
-records it per run — just note the server's CPU model alongside.
+Training is CPU-only and headless — the tiny 256-256 MLPs and MuJoCo's
+CPU-bound stepping don't benefit from a GPU allocation; what the
+cluster buys you is **cores**, so all 9 remaining runs go in parallel
+instead of 3-at-a-time on a laptop. Request a plain CPU partition, not
+a GPU one, unless a GPU partition is the only place with free/fast
+cores.
 
-## One-time setup
-
-```bash
-ssh <you>@<server>
-curl -LsSf https://astral.sh/uv/install.sh | sh   # installs to ~/.local/bin
-git clone <repo-url> launchpad-rl && cd launchpad-rl
-uv sync            # fetches Python 3.11 + pinned deps into .venv
-uv run pytest      # 17 tests should pass before burning compute
-```
-
-## Option A: plain server (tmux/nohup)
-
-Servers usually have far more than 4 cores, so run all 9 remaining runs
-concurrently (each uses ~1 core):
+## 1. Connect
 
 ```bash
-bash scripts/run_matrix_parallel.sh   # nohup-launches every missing run
-tail -f results/push_td3_her_seed1/progress.csv   # watch any run
+# Connect to the school VPN first if required, then:
+ssh <your-username>@xlogin1.comp.nus.edu.sg   # adjust hostname if different
 ```
 
-## Option B: SLURM cluster
+## 2. One-time setup (on the login node — it's the one with internet)
+
+Compute nodes on most SLURM clusters (NUS SoC included) have **no
+internet access**, so `uv sync` must run on the login node first; the
+resulting `.venv` is then reused by every submitted job.
 
 ```bash
-for seed in 0 1 2; do
-  for cfg in td3_her_push td3_noher_push; do
-    sbatch --job-name="$cfg-$seed" --cpus-per-task=2 --mem=4G --time=06:00:00 \
-      --wrap="cd $PWD && uv run python -m src.agent.train --config configs/$cfg.yaml --seed $seed"
-  done
-  sbatch --job-name="sb3-$seed" --cpus-per-task=2 --mem=4G --time=08:00:00 \
-    --wrap="cd $PWD && uv run python -m src.baseline.train_sb3 --config configs/sb3_td3_her_push.yaml --seed $seed"
-done
+curl -LsSf https://astral.sh/uv/install.sh | sh    # installs uv to ~/.local/bin
+source ~/.bashrc                                    # or restart the shell, so `uv` is on PATH
+
+# Clone over HTTPS with a personal access token (Settings > Developer settings >
+# Personal access tokens on GitHub) — avoids setting up SSH keys on the cluster:
+git clone https://<token>@github.com/eugenewong22/RL-Launchpad.git launchpad-rl
+cd launchpad-rl
+
+uv sync        # fetches pinned Python 3.11 + all deps into .venv (needs internet)
+uv run pytest  # 17 tests should pass before spending any cluster-hours
 ```
+
+## 3. Find your partition name
+
+```bash
+sinfo   # lists partitions; pick a CPU partition (e.g. "cpu", "long", "normal")
+```
+
+## 4. Submit the matrix
+
+`scripts/submit_slurm_matrix.sh` submits one `sbatch` job per missing
+run (skips any `results/<run>/` that already exists, so it's safe to
+re-run after partial failures):
+
+```bash
+PARTITION=<name-from-sinfo> bash scripts/submit_slurm_matrix.sh
+squeue -u $USER                              # watch job states
+tail -f results/push_td3_her_seed1/progress.csv   # watch any run's progress
+```
+
+Override `CPUS`, `MEM`, or `TIME` as env vars if the defaults (2 cores,
+4G, 8h) don't fit the queue's limits — a 1M-step FetchPush run took
+about 1 hour on a laptop core, so 8h is generous headroom for a shared
+cluster core.
 
 ## Bringing results home
 
-Each finished run is one directory: `progress.csv`, `config.yaml`, and
-checkpoints. Sync them into the local repo and regenerate everything:
+Each finished run is one self-contained directory: `progress.csv`,
+`config.yaml`, and checkpoints. From your laptop:
 
 ```bash
-rsync -av <you>@<server>:launchpad-rl/results/ results/
+rsync -av <your-username>@xlogin1.comp.nus.edu.sg:launchpad-rl/results/ ~/dev/launchpad-rl/results/
+cd ~/dev/launchpad-rl
 uv run python scripts/make_plots.py
 uv run python scripts/final_eval.py
 ```
 
-Skip runs that already exist locally — arms/seeds are independent, so
-local and server runs mix freely (hardware per run goes in the compute
-table).
+Local and cluster runs mix freely — arms/seeds are independent, and
+each run's own `progress.csv` records its wall-clock, so note the
+cluster's CPU model in the write-up's compute table alongside the
+laptop's.
