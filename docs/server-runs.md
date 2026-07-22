@@ -24,9 +24,11 @@ resulting `.venv` is then reused by every submitted job.
 curl -LsSf https://astral.sh/uv/install.sh | sh    # installs uv to ~/.local/bin
 source ~/.bashrc                                    # or restart the shell, so `uv` is on PATH
 
-# Clone over HTTPS with a personal access token (Settings > Developer settings >
-# Personal access tokens on GitHub) — avoids setting up SSH keys on the cluster:
-git clone https://<token>@github.com/eugenewong22/RL-Launchpad.git launchpad-rl
+# The repo is public — plain HTTPS clone, no token/SSH-key setup needed.
+# (If it's ever made private: a fine-grained PAT scoped to this repo with
+# Contents: Read-only is enough — nothing in this workflow pushes from
+# the cluster, results come home via rsync.)
+git clone https://github.com/eugenewong22/RL-Launchpad.git launchpad-rl
 cd launchpad-rl
 
 uv sync        # fetches pinned Python 3.11 + all deps into .venv (needs internet)
