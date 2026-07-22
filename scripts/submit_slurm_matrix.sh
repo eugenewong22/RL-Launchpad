@@ -3,11 +3,15 @@
 # repo root on the LOGIN node, after `uv sync` has already fetched deps
 # there (compute nodes on most clusters, incl. NUS SoC, have no internet).
 #
-# Usage: PARTITION=<name> bash scripts/submit_slurm_matrix.sh
+# Usage: bash scripts/submit_slurm_matrix.sh
+# Override any default: PARTITION=normal TIME=02:30:00 bash scripts/submit_slurm_matrix.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PARTITION="${PARTITION:?set PARTITION=<name>, e.g. from \`sinfo\` output}"
+# Default 'long': the 8h default TIME below exceeds 'normal' partition's
+# 3h cap on this cluster (both share the same xcn* CPU nodes, 'long'
+# just allows longer walltime). Run `sinfo` to see current node states.
+PARTITION="${PARTITION:-long}"
 CPUS="${CPUS:-2}"
 MEM="${MEM:-4G}"
 TIME="${TIME:-08:00:00}"
