@@ -1,0 +1,16 @@
+# Hypothesis probe (debugging session 2026-07-22): the 1M-step flat
+# runs' root cause is exploration collapse — the behavior policy moved
+# the block in only 2% of episodes, so HER had nothing to relabel.
+# Single change vs td3_her_push.yaml: HER-paper exploration recipe
+# (eps=0.3 sustained random actions + 0.2 noise), short horizon.
+# Pre-declared success criterion: eval success clearly above the 0.05
+# eval-seed floor and rising by 300k steps.
+env_id: FetchPush-v4
+total_env_steps: 300000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+expl_noise: 0.2
+random_eps: 0.3
+device: cpu
+run_dir: results/probe_explore

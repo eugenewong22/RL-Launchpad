@@ -28,6 +28,7 @@ class TrainConfig:
     total_env_steps: int = 1_000_000
     warmup_steps: int = 1_000  # random actions before the policy acts
     expl_noise: float = 0.1  # exploration noise std (fraction of max action)
+    random_eps: float = 0.0  # prob. of a fully random action, sustained all run (HER-paper recipe)
     buffer_capacity: int = 1_000_000
     batch_size: int = 256
     her_k: int = 4  # 0 disables HER (ablation arm)
@@ -54,6 +55,17 @@ class TrainConfig:
         if torch.backends.mps.is_available():
             return "mps"
         return "cpu"
+
+
+def behavior_action(agent, action_space, state, expl_noise, random_eps, rng):
+    """Exploration policy: with probability random_eps take a fully random
+    action, else the policy's action plus Gaussian noise. Sustained random
+    actions (not just warmup) are what keep generating object-contact
+    episodes on contact tasks — without them the behavior policy can
+    collapse to never touching the block and HER has nothing to relabel."""
+    if rng.random() < random_eps:
+        return action_space.sample()
+    return agent.select_action(state, noise_std=expl_noise)
 
 
 def run_training(cfg: TrainConfig) -> dict:
@@ -103,6 +115,7 @@ def run_training(cfg: TrainConfig) -> dict:
     logger = csv.writer(log_file)
     logger.writerow(["env_steps", "wall_clock_s", "success_rate", "mean_return", "critic_loss"])
 
+    explore_rng = np.random.default_rng(cfg.seed + 777)  # eps-random decisions
     env_steps = 0
     next_eval = cfg.eval_every
     best_success = -1.0
@@ -123,7 +136,10 @@ def run_training(cfg: TrainConfig) -> dict:
             if env_steps < cfg.warmup_steps:
                 action = env.action_space.sample()
             else:
-                action = agent.select_action(concat_obs(obs), noise_std=cfg.expl_noise)
+                action = behavior_action(
+                    agent, env.action_space, concat_obs(obs),
+                    cfg.expl_noise, cfg.random_eps, explore_rng,
+                )
             ep_des[t], ep_act[t] = obs["desired_goal"], action
             obs, _, _, _, _ = env.step(action)
             ep_obs[t + 1], ep_ach[t + 1] = obs["observation"], obs["achieved_goal"]
