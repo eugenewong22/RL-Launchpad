@@ -40,7 +40,10 @@ def test_short_training_run_writes_log_and_checkpoint(tmp_path):
     with open(log_path) as f:
         rows = list(csv.DictReader(f))
     assert len(rows) >= 2  # evals at 150 and 300 steps
-    assert {"env_steps", "wall_clock_s", "success_rate", "critic_loss"} <= set(rows[0])
+    assert {"env_steps", "wall_clock_s", "success_rate", "critic_loss", "contact_frac"} <= set(
+        rows[0]
+    )
+    assert all(0.0 <= float(r["contact_frac"]) <= 1.0 for r in rows)
     assert int(rows[-1]["env_steps"]) == 300
 
     assert (tmp_path / "run" / "checkpoint_latest.pt").exists()

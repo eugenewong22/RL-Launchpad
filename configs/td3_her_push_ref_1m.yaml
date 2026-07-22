@@ -1,0 +1,18 @@
+# Hypothesis probe #3: same reference-stabilizer package as probe #2
+# (which broke the 0.05 floor for the first time — evals of 0.10-0.15
+# from 170k on — but hadn't clearly "lifted off" by its 300k horizon).
+# Single change: horizon 300k -> 1M. Pre-declared criterion: success
+# >= 0.3 and clearly trending upward by 1M; otherwise H3 is rejected
+# and the next single variable is batch_size 2048.
+env_id: FetchPush-v4
+total_env_steps: 1000000
+eval_every: 10000
+n_eval_episodes: 20
+her_k: 4
+expl_noise: 0.2
+random_eps: 0.3
+action_l2: 1.0
+normalize_obs: true
+tau: 0.05
+device: cpu
+run_dir: results/probe_ref_1m

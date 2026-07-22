@@ -119,7 +119,9 @@ def run_training(cfg: TrainConfig) -> dict:
     log_path = run_dir / "progress.csv"
     log_file = open(log_path, "w", newline="")
     logger = csv.writer(log_file)
-    logger.writerow(["env_steps", "wall_clock_s", "success_rate", "mean_return", "critic_loss"])
+    logger.writerow(
+        ["env_steps", "wall_clock_s", "success_rate", "mean_return", "critic_loss", "contact_frac"]
+    )
 
     explore_rng = np.random.default_rng(cfg.seed + 777)  # eps-random decisions
     env_steps = 0
@@ -127,6 +129,7 @@ def run_training(cfg: TrainConfig) -> dict:
     best_success = -1.0
     start = time.monotonic()
     recent_losses: list[float] = []
+    contacts: list[float] = []
     last_result: dict = {}
 
     while env_steps < cfg.total_env_steps:
@@ -151,6 +154,9 @@ def run_training(cfg: TrainConfig) -> dict:
             ep_obs[t + 1], ep_ach[t + 1] = obs["observation"], obs["achieved_goal"]
             env_steps += 1
         buffer.add_episode(ep_obs, ep_ach, ep_des, ep_act)
+        # Fraction of training episodes that moved the object >1cm — the
+        # direct gauge of whether HER has non-degenerate material.
+        contacts.append(float(np.linalg.norm(ep_ach[-1] - ep_ach[0]) > 0.01))
         if normalizer is not None:
             normalizer.update(np.concatenate([ep_obs[:T], ep_des], axis=1))
 
@@ -169,13 +175,23 @@ def run_training(cfg: TrainConfig) -> dict:
             wall = time.monotonic() - start
             mean_loss = float(np.mean(recent_losses)) if recent_losses else float("nan")
             recent_losses.clear()
+            contact_frac = float(np.mean(contacts)) if contacts else 0.0
+            contacts.clear()
             logger.writerow(
-                [env_steps, f"{wall:.1f}", result["success_rate"], result["mean_return"], mean_loss]
+                [
+                    env_steps,
+                    f"{wall:.1f}",
+                    result["success_rate"],
+                    result["mean_return"],
+                    mean_loss,
+                    contact_frac,
+                ]
             )
             log_file.flush()
             print(
                 f"[{cfg.env_id} seed={cfg.seed}] steps={env_steps} "
-                f"success={result['success_rate']:.2f} loss={mean_loss:.4f} wall={wall:.0f}s"
+                f"success={result['success_rate']:.2f} contact={contact_frac:.2f} "
+                f"loss={mean_loss:.4f} wall={wall:.0f}s"
             )
             agent.save(run_dir / "checkpoint_latest.pt")
             if normalizer is not None:
