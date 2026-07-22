@@ -33,7 +33,7 @@ submit() { # submit <run_dir> <cmd...>
     --chdir="$PWD" \
     --output="logs/${name}.out" \
     --export=ALL,OMP_NUM_THREADS="$CPUS" \
-    --wrap="$*"
+    --wrap="export PATH=\"\$HOME/.venvs/bootstrap/bin:\$HOME/.local/bin:\$HOME/.cargo/bin:\$PATH\"; $*"
   echo "submitted $name"
 }
 
