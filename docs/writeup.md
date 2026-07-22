@@ -76,10 +76,17 @@ disjoint from all training seeds (R4).*
 sustained through 50k, 1.9 min wall-clock on laptop CPU
 (`results/reach_smoke_seed0/`).
 
+**Classical baseline (scripted two-phase push controller,
+`scripts/diagnose_push.py`):** 54% success on the identical 50-episode
+R4 protocol. This is the "simple controller" bar the learned policies
+must beat — and it is not trivial: it fails exactly where open-loop
+scripting should (goals requiring re-approach after overshoot).
+
 **FetchPush, 3 seeds × 1M steps:** <!-- TODO: fill after matrix -->
 - From-scratch TD3+HER: TODO mean ± std final success
 - SB3 TD3+HER baseline: TODO mean ± std final success
 - TD3 no-HER ablation: TODO (expected: near-zero — quantifies HER's contribution)
+- Scripted classical baseline: 0.540 (protocol above; no learning, no variance across seeds)
 
 ![learning curves](../results/learning_curves.png)
 
@@ -107,9 +114,20 @@ checkpoint — e.g. blocks near workspace edge, goals behind the block
 requiring re-approach, pushes that overshoot and cannot recover. Include
 at least one failure clip in the demo video. -->
 
-**Negative results:** <!-- TODO: record anything that didn't work during
-the matrix runs (divergent seeds, hyperparameter dead ends), or state
-plainly that all 3 seeds trained stably if true. -->
+**Negative results (found the hard way, diagnosed systematically):**
+Our first full FetchPush campaign — from-scratch TD3+HER, an SB3 TD3+HER
+baseline, and a no-HER ablation, 1M env steps each — all flat-lined at
+the eval floor (one eval seed starts in a success state; success = 0.05
+throughout). Diagnosis with pre-declared probes: (1) a scripted
+controller solves the task (env fine); (2) the behavior policy moved the
+block in 2% of episodes; (3) the trained actor had **saturated** — mean
+|action| = 1.0, gripper pinned ~1.6 m from the block, tanh gradients
+dead. Adding sustained ε-random exploration alone did NOT fix it (block
+still moved in 0/50 episodes — a collapsed policy acts as a restoring
+force against per-step random actions). The failure and its mechanism
+shaped the final design: action-L2 penalty, observation normalization,
+and reference target-update rate. <!-- TODO: finalize once the fixed
+config's runs land; include the flat curves as a figure. -->
 
 **What we'd do with two more weeks:**
 1. FetchPickAndPlace (grasping adds a contact mode Push lacks) with the
