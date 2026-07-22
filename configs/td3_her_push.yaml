@@ -1,8 +1,17 @@
 # Primary reported result: from-scratch TD3+HER on FetchPush.
+# Stabilizer package validated 2026-07-22/23 (see results/diagnostics/ and
+# docs/writeup.md negative-results section): the original config's actor
+# saturated and never touched the block. With the additions below, seed 0
+# reached 100% eval success by ~520k steps, sustained through 1M.
 env_id: FetchPush-v4
 total_env_steps: 1000000
 eval_every: 10000
 n_eval_episodes: 20
 her_k: 4
-device: cpu  # 256-wide MLPs: CPU beats GPU dispatch overhead; set cuda on a GPU box if desired
+expl_noise: 0.2      # was 0.1 — HER-paper exploration
+random_eps: 0.3      # sustained random-action mixing (was warmup-only)
+action_l2: 1.0       # anti-saturation actor penalty (baselines-HER)
+normalize_obs: true  # running obs/goal normalization, clip ±5
+tau: 0.05            # reference target-update rate (was 0.005)
+device: cpu
 run_dir: results/push_td3_her

@@ -18,10 +18,12 @@ import gymnasium as gym
 import gymnasium_robotics  # noqa: F401
 import numpy as np
 import yaml
-from stable_baselines3 import TD3
+from stable_baselines3 import SAC, TD3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.her import HerReplayBuffer
+
+ALGOS = {"td3": TD3, "sac": SAC}
 
 from src.agent.evaluate import evaluate
 
@@ -29,6 +31,7 @@ from src.agent.evaluate import evaluate
 @dataclass
 class BaselineConfig:
     env_id: str = "FetchPush-v4"
+    algo: str = "td3"  # td3 | sac (SAC explores via entropy; no action noise)
     total_env_steps: int = 1_000_000
     her_k: int = 4
     gamma: float = 0.95
@@ -93,7 +96,13 @@ def run_baseline(cfg: BaselineConfig) -> None:
 
     env = gym.make(cfg.env_id)
     n_actions = env.action_space.shape[0]
-    model = TD3(
+    algo_cls = ALGOS[cfg.algo]
+    kwargs = {}
+    if cfg.algo == "td3":  # SAC explores via its stochastic policy instead
+        kwargs["action_noise"] = NormalActionNoise(
+            np.zeros(n_actions), cfg.expl_noise * np.ones(n_actions)
+        )
+    model = algo_cls(
         "MultiInputPolicy",
         env,
         replay_buffer_class=HerReplayBuffer,
@@ -104,10 +113,10 @@ def run_baseline(cfg: BaselineConfig) -> None:
         tau=cfg.tau,
         learning_rate=cfg.lr,
         learning_starts=cfg.learning_starts,
-        action_noise=NormalActionNoise(np.zeros(n_actions), cfg.expl_noise * np.ones(n_actions)),
         policy_kwargs=dict(net_arch=[256, 256]),
         seed=cfg.seed,
         verbose=0,
+        **kwargs,
     )
     callback = CsvEvalCallback(cfg, run_dir / "progress.csv")
     model.learn(total_timesteps=cfg.total_env_steps, callback=callback)

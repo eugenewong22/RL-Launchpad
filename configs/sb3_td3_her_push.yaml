@@ -1,7 +1,14 @@
 # SB3 TD3+HER baseline on FetchPush (R2 comparison arm).
+# Shares the task, obs/action space, eval protocol, buffer/batch/lr/tau
+# and exploration noise with the from-scratch arm. Note: SB3's TD3 has no
+# action-L2 penalty, obs normalization, or sustained eps-random mixing —
+# those are exactly the stabilizers our diagnosis showed matter here, so
+# this arm doubles as an ablation of them (declared in the write-up).
 env_id: FetchPush-v4
 total_env_steps: 1000000
 eval_every: 10000
 n_eval_episodes: 20
 her_k: 4
+expl_noise: 0.2
+tau: 0.05
 run_dir: results/push_sb3_her
