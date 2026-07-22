@@ -92,8 +92,10 @@ and the honest analysis of why. -->
   no-HER ablation shows what the relabeling buys per step.
 - **Compute honesty (R6):** every run logs env steps and wall-clock;
   `results/compute_table.md` reports both for ours *and* the baseline.
-  All training ran on CPU (Apple M-series laptop) — measured faster than
-  GPU dispatch for 256-wide MLPs at batch 256. <!-- TODO: final table -->
+  All training is CPU-only (Apple M-series laptop and/or university
+  server CPU — per-run hardware noted in the table); CPU was measured
+  faster than GPU dispatch for 256-wide MLPs at batch 256.
+  <!-- TODO: final table + per-run hardware -->
 - **Control-rate realism:** the policy is a 4-layer-equivalent MLP,
   ~0.1 ms/action on CPU — far inside a 25 Hz control budget; no
   inference-side compute concerns at deployment scale.
