@@ -18,7 +18,9 @@ import numpy as np
 ARM_LABELS = {
     "push_td3_her": "TD3+HER (from scratch)",
     "push_sb3_her": "TD3+HER (SB3 baseline)",
+    "push_sb3_sac": "SAC+HER (SB3 baseline)",
     "push_td3_noher": "TD3 without HER (ablation)",
+    "pickplace_td3_her": "PickAndPlace TD3+HER (from scratch)",
     "reach_smoke": "FetchReach smoke",
 }
 

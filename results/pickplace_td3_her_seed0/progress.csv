@@ -1,0 +1,3 @@
+env_steps,wall_clock_s,success_rate,mean_return,critic_loss,contact_frac
+10000,22.8,0.05,-47.5,0.10280946936355441,0.105
+20000,48.9,0.05,-47.5,0.09908286604080349,0.105

@@ -82,11 +82,17 @@ R4 protocol. This is the "simple controller" bar the learned policies
 must beat — and it is not trivial: it fails exactly where open-loop
 scripting should (goals requiring re-approach after overshoot).
 
-**FetchPush, 3 seeds × 1M steps:** <!-- TODO: fill after matrix -->
-- From-scratch TD3+HER: TODO mean ± std final success
-- SB3 TD3+HER baseline: TODO mean ± std final success
-- TD3 no-HER ablation: TODO (expected: near-zero — quantifies HER's contribution)
-- Scripted classical baseline: 0.540 (protocol above; no learning, no variance across seeds)
+**FetchPush, 3 seeds × 1M steps:** <!-- TODO: fill seeds 1-2 + SB3/SAC arms after matrix -->
+- From-scratch TD3+HER: seed 0 = **1.000** on the 50-episode R4 protocol
+  (mean return −10.4 ≈ ten-step solves); liftoff ~350k steps, 100% eval
+  success sustained from ~520k to 1M. Seeds 1–2: TODO.
+- Robustness beyond the protocol: 199/200 held-out seeds solved (~0.5%
+  failure rate; the one failure is shown in the demo video, labeled).
+- SB3 TD3+HER baseline: TODO (out-of-the-box it lacks the three
+  stabilizers above — this arm doubles as their ablation)
+- SB3 SAC+HER baseline: TODO
+- TD3 no-HER ablation: TODO (quantifies HER's contribution)
+- Scripted classical baseline: 0.540 (identical protocol; no learning, no variance)
 
 ![learning curves](../results/learning_curves.png)
 
@@ -109,10 +115,11 @@ and the honest analysis of why. -->
 
 ## 5. Honesty & Trajectory
 
-**Known failure modes:** <!-- TODO: fill from video review of the final
-checkpoint — e.g. blocks near workspace edge, goals behind the block
-requiring re-approach, pushes that overshoot and cannot recover. Include
-at least one failure clip in the demo video. -->
+**Known failure modes:** on 200 held-out (non-eval) initial states the
+seed-0 policy fails once (~0.5%): seed 2081, captured in
+`results/push_failure_seed2081.mp4`. <!-- TODO: describe the failure
+mechanically after watching the clip (e.g. overshoot without re-approach),
+and re-check across seeds 1-2 once the matrix lands. -->
 
 **Negative results (found the hard way, diagnosed systematically):**
 Our first full FetchPush campaign — from-scratch TD3+HER, an SB3 TD3+HER

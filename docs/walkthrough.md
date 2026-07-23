@@ -45,7 +45,8 @@ Follow-ups to expect:
 ## The actor loss
 
 ```python
-actor_loss = -critic.q1(state, actor(state)).mean()
+pi = actor(state)
+actor_loss = -critic.q1(state, pi).mean() + action_l2 * (pi / max_action).pow(2).mean()
 ```
 
 *"Deterministic policy gradient: push actions uphill on the critic's
@@ -53,7 +54,12 @@ value surface. We use only Q1 — using min(Q1,Q2) here buys little
 (the pessimism matters for **targets**, not for the ascent direction)
 and costs a second forward pass. The actor updates every second critic
 update ('delayed'), so it always climbs a partially-converged, less
-exploitable landscape."*
+exploitable landscape. The L2 term penalizes action magnitude: under
+sparse rewards the early critic surface is garbage, and without this
+term the actor climbs it to the tanh boundary and pins there with
+vanishing gradients — we measured exactly that failure (mean |action|
+= 1.0, gripper parked 1.6 m from the block) before adding it. It's the
+`action_l2` stabilizer from the reference HER implementation."*
 
 ## Architecture decisions (pick any one)
 

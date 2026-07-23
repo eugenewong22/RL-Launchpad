@@ -1,10 +1,16 @@
-# Stretch goal (plan Phase 4, step 11): FetchPickAndPlace — only after
-# FetchPush is solid and reproducible. Identical recipe; grasping adds a
-# contact mode Push lacks.
+# Stretch goal: FetchPickAndPlace with the validated stabilizer package
+# (identical to td3_her_push.yaml except the env). Grasping adds a
+# contact mode Push lacks; goals can be in the air, so success without
+# grasping is impossible for most goals.
 env_id: FetchPickAndPlace-v4
 total_env_steps: 1000000
 eval_every: 10000
 n_eval_episodes: 20
 her_k: 4
+expl_noise: 0.2
+random_eps: 0.3
+action_l2: 1.0
+normalize_obs: true
+tau: 0.05
 device: cpu
 run_dir: results/pickplace_td3_her
