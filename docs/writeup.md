@@ -94,6 +94,14 @@ scripting should (goals requiring re-approach after overshoot).
 - TD3 no-HER ablation: TODO (quantifies HER's contribution)
 - Scripted classical baseline: 0.540 (identical protocol; no learning, no variance)
 
+**Stretch task — FetchPickAndPlace (same config, zero re-tuning):**
+seed 0 = **0.740** on the 50-episode R4 protocol at 1M steps (plateau
+70–75%; grasping + in-air goals, so no pushing shortcut exists). The
+demo video includes both successes and failures from the protocol seeds
+(3/6 in the first six). One config transferring across two contact
+tasks without touching a hyperparameter is evidence the recipe, not
+per-task tuning, is doing the work.
+
 ![learning curves](../results/learning_curves.png)
 
 <!-- TODO: 1-2 sentences interpreting the curves: match/beat/lose vs SB3,
