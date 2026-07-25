@@ -8,10 +8,13 @@ lines in `src/agent/td3.py` and `src/agent/networks.py`.*
 ## The critic loss, line by line
 
 ```python
-noise = (torch.randn_like(action) * policy_noise).clamp(-noise_clip, noise_clip)
-next_action = (actor_target(next_state) + noise).clamp(-max_action, max_action)
-q1_t, q2_t = critic_target(next_state, next_action)
-target_q = reward + gamma * torch.min(q1_t, q2_t)
+with torch.no_grad():                      # the target is a fixed regression
+    noise = (torch.randn_like(action) * policy_noise).clamp(-noise_clip, noise_clip)
+    next_action = (actor_target(next_state) + noise).clamp(-max_action, max_action)
+    q1_t, q2_t = critic_target(next_state, next_action)
+    target_q = reward + gamma * torch.min(q1_t, q2_t)
+
+q1, q2 = critic(state, action)
 critic_loss = F.mse_loss(q1, target_q) + F.mse_loss(q2, target_q)
 ```
 
@@ -91,10 +94,67 @@ reward-free replay buffer into one dense with successes. The relabeled
 goal must be identical in state and next_state, and the reward is
 recomputed from the *next* achieved goal — both are unit-tested."*
 
+## The hard questions (rehearse these, not the easy ones)
+
+These are the questions our own results invite. Each has a short honest
+answer; none of them has a spin that survives a follow-up.
+
+**"Your SB3 TD3+HER baseline scored 0.05 and you scored ~1.0. Isn't that
+too good to be true?"**
+*"Yes, and we don't claim it. That arm is a failed baseline configuration,
+not a scalp. Two things make it non-suspicious: SB3's SAC+HER solves the
+task at ~1.0 under the exact same harness, so the env, the eval protocol
+and the observation/action spaces are all fine — and our own TD3+HER was
+equally flat at those same hyperparameters until we changed five settings.
+Two independent implementations failing identically points at the config,
+not at either codebase. Our fair comparison is SAC+HER, and against it we
+match rather than beat."*
+
+**"Then would your five changes fix SB3's TD3?"**
+*"We don't know — we never ran it. The changes live in our training loop
+and porting them into SB3 was out of scope. Saying anything stronger would
+be claiming an experiment we didn't do."*
+
+**"You changed five things at once. Which one mattered?"**
+*"We can't apportion credit and we say so in the write-up. We had one
+deadline and one cluster allocation, so we shipped the package and
+verified it works. The single-factor sweep is the first thing we'd run
+with more compute. What we can defend is the mechanism: we measured the
+actor saturated at mean |action| = 1.0 with the gripper parked 1.6 m from
+the block, and action-L2 plus the faster target rate attack that directly."*
+
+**"τ=0.05 is 10× the usual value. Justify it."**
+*"It's the value the reference HER implementations use for Fetch, not
+something we tuned into. The intuition: with a saturated actor and slow
+targets, the critic's bootstrapped estimates stay self-consistent for a
+long time — targets barely move, so nothing contradicts the bad policy.
+Faster target tracking makes the value estimate follow the online critic
+closely enough that the contradiction shows up."*
+
+**"How do you know HER is what's doing the work, and not the stabilizers?"**
+*"Because the no-HER ablation has all five stabilizers and still never
+leaves the floor — `her_k=0` is the only difference. We log `contact_frac`:
+the HER arms touch the block in 95% of episodes, the no-HER arm in 4–7%.
+That's in the committed CSVs, not inferred."*
+
+**"Anything you'd do differently?"**
+*"Pick SAC. A deterministic actor is exactly what saturates under sparse
+reward; SAC's entropy term makes it structurally immune, which is why it's
+the one out-of-the-box baseline that worked. We chose TD3 for fewer moving
+parts and paid for it in three stabilizers and a diagnosis campaign."*
+
 ## Honest numbers to have ready
 
 - Eval protocol: 50 episodes, seeds 10000–10049, disjoint from training;
   deterministic policy; success = env's `is_success` at episode end.
 - FetchReach: 98% (50-ep protocol) — and the 10-ep in-training eval said
   100%, a live example of why R4 mandates ≥50 episodes.
-- FetchPush numbers: see `results/final_eval.md` once the matrix lands.
+- FetchPush, in-training eval on the committed CSVs: ours 1.00 on all three
+  seeds; SAC+HER 1.00/0.95/1.00; SB3 TD3+HER and the no-HER ablation flat at
+  the 0.05 floor. Quote the 50-episode R4 numbers from
+  `results/final_eval_push.md` — that file, not memory, is the source.
+- FetchPickAndPlace: 0.740, seed 0, same config, no re-tuning.
+- Robustness: 199/200 held-out non-eval initial states
+  (`results/failure_sweep.md`). If asked about the one failure: contact
+  without sustained pushing, 17% of the required displacement, and we
+  decline to attribute a cause from a single sample.
