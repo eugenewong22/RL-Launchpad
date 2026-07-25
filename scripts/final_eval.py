@@ -31,7 +31,15 @@ def load_policy_fn(run_dir: Path, env_id: str, run_cfg: dict):
         from stable_baselines3 import TD3 as SB3TD3
 
         algo = run_cfg.get("algo", "td3")
-        model = {"td3": SB3TD3, "sac": SB3SAC}[algo].load(zp)
+        # These runs trained with HerReplayBuffer, and SB3 refuses to
+        # rebuild one without an env. We only want the policy weights, so
+        # drop the buffer entirely rather than allocating a 1e6 dict buffer.
+        eval_only = {
+            "replay_buffer_class": None,
+            "replay_buffer_kwargs": {},
+            "buffer_size": 1,
+        }
+        model = {"td3": SB3TD3, "sac": SB3SAC}[algo].load(zp, custom_objects=eval_only)
         return lambda obs: model.predict(obs, deterministic=True)[0], f"sb3-{algo}"
     return None
 
@@ -50,6 +58,8 @@ def main():
         if not m:
             continue
         arm, seed = m.group(1), int(m.group(2))
+        if arm.startswith("probe"):
+            continue  # short diagnostic probes, not reported arms
         # Each run records its own env; --env-id filters which arms to score.
         with open(run_dir / "config.yaml") as f:
             run_cfg = yaml.safe_load(f)

@@ -1,7 +1,7 @@
-# Final evaluation — FetchReach-v4
+# Final evaluation — FetchPush-v4
 
 50 episodes per seed, deterministic policy, eval seeds 10000..10049 (disjoint from training).
 
 | Arm | Seeds | Success rate (mean ± std) | Per-seed |
 |---|---|---|---|
-| reach_smoke | 1 | 0.980 ± 0.000 | s0=0.98 |
+| push_td3_her | 1 | 1.000 ± 0.000 | s0=1.00 |
