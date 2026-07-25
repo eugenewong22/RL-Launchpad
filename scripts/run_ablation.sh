@@ -50,8 +50,11 @@ for key in "${KEYS[@]}"; do
       --seed 0 > "logs/ablate_${key}.log" 2>&1 &
 
   started=$((started + 1))
-  # Throttle to $JOBS concurrent trainings.
-  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
+  # Throttle to $JOBS concurrent trainings. Polled rather than `wait -n`:
+  # macOS ships bash 3.2, where `wait -n` does not exist and, under set -e,
+  # takes the whole script down on the first arm. 5s granularity is nothing
+  # against ~46-minute runs.
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do sleep 5; done
 done
 wait
 echo "=== $started arm(s) finished ==="
