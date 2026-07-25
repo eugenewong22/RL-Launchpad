@@ -12,7 +12,11 @@
 #          --chdir="$PWD" --output=logs/eval.out scripts/eval_cluster.sh
 # Then: cat logs/eval.out
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# Under sbatch, SLURM ships the script's *contents* to the compute node and
+# runs a spooled copy (/var/spool/slurmd/job<N>/slurm_script), so $0 is NOT
+# this file and `dirname $0`/.. lands in /var/spool. SLURM_SUBMIT_DIR is the
+# submitting directory; fall back to $0 for direct `bash scripts/...` runs.
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
 
 # Call the venv's python directly — uv is not needed once .venv exists, and
 # sbatch jobs don't source ~/.bashrc so uv may not be on PATH anyway.
