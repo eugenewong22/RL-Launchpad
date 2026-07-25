@@ -65,15 +65,12 @@ def main():
     runs = args.runs or sorted(p.name for p in res.glob("push_td3_her_seed*"))
     seeds = range(args.seed_base, args.seed_base + args.episodes)
 
-    lines = [
-        "# Failure-mode sweep on held-out initial states",
-        "",
-        f"Env seeds {seeds.start}..{seeds.stop - 1} — disjoint from both the "
-        "training seeds and the R4 eval seeds (10000+).",
-        "",
-        "| Run | Success | Failures | Failing seed (required push m / progress / closest approach m) |",
-        "|---|---|---|---|",
-    ]
+    # Summary rows and per-run distance tables are accumulated separately:
+    # interleaving them broke the summary into one orphaned single-row table
+    # per run instead of one table with a row per run.
+    summary_rows, distance_blocks = [], []
+    total_eps = total_fail = 0
+
     for name in runs:
         run_dir = res / name
         if not (run_dir / "checkpoint_best.pt").exists():
@@ -86,21 +83,42 @@ def main():
             f"{seeds.start + i} ({d0[i]:.3f} / {progress[i]:.0%} / {touched[i]:.3f})"
             for i in np.where(ok == 0)[0]
         ) or "none"
-        lines.append(
+        summary_rows.append(
             f"| {name} | {ok.mean():.3f} | {int((1 - ok).sum())}/{len(ok)} | {detail} |"
         )
+        total_eps += len(ok)
+        total_fail += int((1 - ok).sum())
         print(f"{name}: success={ok.mean():.3f} failures={int((1 - ok).sum())} | {detail}")
 
         # Success against required push distance, to test whether long pushes
-        # are what actually fails. (For seed 0 they are not: the single
-        # failure is in the longest bin, but 41/42 other long pushes succeed.)
-        lines += ["", f"Success vs required push distance — `{name}`:", "",
-                  "| Required push (m) | n | Success |", "|---|---|---|"]
+        # are what actually fails. They are not: seed 0's single failure is in
+        # the longest bin, but every other long push succeeds on every seed.
+        distance_blocks += ["", f"Success vs required push distance — `{name}`:", "",
+                            "| Required push (m) | n | Success |", "|---|---|---|"]
         for lo, hi in zip(BINS[:-1], BINS[1:]):
             m = (d0 >= lo) & (d0 < hi)
             if m.sum():
-                lines.append(f"| {lo:.2f}–{hi:.2f} | {int(m.sum())} | {ok[m].mean():.3f} |")
-        lines.append("")
+                distance_blocks.append(
+                    f"| {lo:.2f}–{hi:.2f} | {int(m.sum())} | {ok[m].mean():.3f} |"
+                )
+
+    lines = [
+        "# Failure-mode sweep on held-out initial states",
+        "",
+        f"Env seeds {seeds.start}..{seeds.stop - 1} — disjoint from both the "
+        "training seeds and the R4 eval seeds (10000+). Every seed is run "
+        "against every policy, so a state that one policy fails and another "
+        "solves is distinguishable from a state that is intrinsically hard.",
+        "",
+        f"**{total_eps - total_fail}/{total_eps}** across all runs "
+        f"({total_fail} failure{'s' if total_fail != 1 else ''}).",
+        "",
+        "| Run | Success | Failures | Failing seed (required push m / progress / closest approach m) |",
+        "|---|---|---|---|",
+        *summary_rows,
+        *distance_blocks,
+        "",
+    ]
 
     out = res / "failure_sweep.md"
     out.write_text("\n".join(lines) + "\n")
