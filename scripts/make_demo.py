@@ -133,10 +133,15 @@ def main():
                   ("TD3+HER, written from scratch", 12, FG),
                   ("held-out eval seeds 10000+", 10, MUTED)], 2.5),
         ("clip", res / "push_demo.mp4", 1.0),
+        # The reported 50-episode eval contains no seed-0 failures, so this
+        # clip necessarily comes from outside it. Saying so on the card keeps
+        # a judge from reading the video as contradicting the results table.
         ("card", [("Failure mode", 20, "#ff8f6b"),
-                  ("seed 2081: object overshoots", 12, FG),
-                  ("the goal; policy does not recover", 12, FG),
-                  ("(shown at half speed)", 10, MUTED)], 3.0),
+                  ("0 failures in the reported 50 eps -", 10, MUTED),
+                  ("swept 200 held-out states to find one", 10, MUTED),
+                  ("seed 2081: reaches the block,", 12, FG),
+                  ("then pushes only 17% of the way", 12, FG),
+                  ("(half speed)", 9, MUTED)], 4.5),
         ("clip", res / "push_failure_seed2081.mp4", 2.0),
         ("card", [("FetchPickAndPlace-v4", 18, ACCENT),
                   ("stretch task, same agent code", 12, FG),
