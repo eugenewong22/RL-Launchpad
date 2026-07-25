@@ -10,26 +10,29 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-import gymnasium as gym
-import gymnasium_robotics  # noqa: F401
+import gymnasium_robotics  # noqa: F401  (registers the Fetch env IDs)
 import numpy as np
 import yaml
 
 from src.agent.evaluate import evaluate, load_policy
 
 
-def load_policy_fn(run_dir: Path, env_id: str):
+def load_policy_fn(run_dir: Path, env_id: str, run_cfg: dict):
     """Return (policy_fn, kind) for a run dir holding either our .pt
-    checkpoint or an SB3 .zip — or None if neither exists."""
+    checkpoint or an SB3 .zip — or None if neither exists. SB3 arms are
+    loaded with the class the run itself recorded (td3 | sac); loading a
+    SAC checkpoint as TD3 silently fails, so this must not be hardcoded."""
     pt = run_dir / "checkpoint_best.pt"
     zp = run_dir / "checkpoint_latest.zip"
     if pt.exists():
         return load_policy(pt, env_id), "from-scratch"
     if zp.exists():
+        from stable_baselines3 import SAC as SB3SAC
         from stable_baselines3 import TD3 as SB3TD3
 
-        model = SB3TD3.load(zp)
-        return lambda obs: model.predict(obs, deterministic=True)[0], "sb3"
+        algo = run_cfg.get("algo", "td3")
+        model = {"td3": SB3TD3, "sac": SB3SAC}[algo].load(zp)
+        return lambda obs: model.predict(obs, deterministic=True)[0], f"sb3-{algo}"
     return None
 
 
@@ -49,10 +52,10 @@ def main():
         arm, seed = m.group(1), int(m.group(2))
         # Each run records its own env; --env-id filters which arms to score.
         with open(run_dir / "config.yaml") as f:
-            run_env = yaml.safe_load(f)["env_id"]
-        if run_env != args.env_id:
+            run_cfg = yaml.safe_load(f)
+        if run_cfg["env_id"] != args.env_id:
             continue
-        loaded = load_policy_fn(run_dir, args.env_id)
+        loaded = load_policy_fn(run_dir, args.env_id, run_cfg)
         if loaded is None:
             continue
         policy_fn, kind = loaded

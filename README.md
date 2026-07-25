@@ -13,16 +13,38 @@ baseline under an identical evaluation protocol.
 Requires [uv](https://docs.astral.sh/uv/) (any platform; CPU is enough).
 
 ```bash
-git clone <this-repo> && cd launchpad-rl
-uv sync                                    # installs pinned deps from uv.lock (~2 min)
-uv run python scripts/check_env.py         # simulator sanity check (~30 s)
-uv run pytest                              # unit + integration tests (~30 s)
+git clone https://github.com/eugenewong22/RL-Launchpad.git && cd RL-Launchpad
+uv sync                                    # installs pinned deps from uv.lock
+uv run python scripts/check_env.py         # simulator sanity check
+uv run pytest                              # unit + integration tests
 
 # Evaluate the reported checkpoint on the R4 protocol (50 fixed eval seeds):
 uv run python -m src.agent.evaluate \
     --checkpoint results/push_td3_her_seed0/checkpoint_best.pt \
     --env-id FetchPush-v4 --episodes 50
 ```
+
+Expected final line:
+
+```
+FetchPush-v4: success_rate=1.000 mean_return=-10.4 over 50 episodes (eval seeds 10000..10049)
+```
+
+**Measured end-to-end** (Apple M-series laptop, CPU only, rehearsed from a
+clean clone into an empty directory):
+
+| Stage | Cold cache | Warm cache |
+|---|---|---|
+| `git clone` | 20 s | 20 s |
+| `uv sync` | 10 s (792 MB of wheels downloaded) | 1 s |
+| `check_env.py` | 4 s | 4 s |
+| `pytest` (26 tests) | 14 s | 14 s |
+| 50-episode eval | 2 s | 2 s |
+| **total** | **~50 s** | **41 s** |
+
+The `uv sync` row is network-bound — 792 MB is dominated by the pinned
+PyTorch wheel, so a slow link moves that row and nothing else. Even at
+1 MB/s the total stays inside the 15-minute budget.
 
 To watch the policy, render episodes from the same checkpoint and seeds:
 
