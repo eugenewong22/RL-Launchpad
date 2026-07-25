@@ -65,7 +65,7 @@ into `results/config_diff.md`):
 | Key | Failed | Reported | Why |
 |---|---|---|---|
 | `tau` | 0.005 | **0.05** | 10× faster target tracking; slow targets let a saturated actor's value estimates stay self-consistent |
-| `action_l2` | — | **1.0** | penalizes mean |a|² — direct counter-pressure to tanh saturation |
+| `action_l2` | — | **1.0** | penalizes the squared action magnitude — direct counter-pressure to tanh saturation |
 | `normalize_obs` | — | **true** | Fetch positions and velocities differ by ~2 orders of magnitude |
 | `expl_noise` | 0.1 | **0.2** | wider Gaussian exploration |
 | `random_eps` | — | **0.3** | 30% fully-random actions, sustained, not annealed |

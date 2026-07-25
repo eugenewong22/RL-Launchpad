@@ -2,7 +2,10 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-results/**/*.mp4
+# NOT ignoring results/*.mp4: the demo clips are deliverables (R4 requires
+# video from the reported checkpoint) and docs/writeup.md cites one by path.
+# All four total ~450 KB. Scratch renders go to a name we do ignore:
+results/scratch_*.mp4
 # SLURM job stdout from the cluster runs; the reported evidence is the
 # committed progress.csv / config.yaml under results/, not these.
 logs/
