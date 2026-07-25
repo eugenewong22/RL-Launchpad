@@ -149,10 +149,15 @@ parts and paid for it in three stabilizers and a diagnosis campaign."*
   deterministic policy; success = env's `is_success` at episode end.
 - FetchReach: 98% (50-ep protocol) — and the 10-ep in-training eval said
   100%, a live example of why R4 mandates ≥50 episodes.
-- FetchPush, in-training eval on the committed CSVs: ours 1.00 on all three
-  seeds; SAC+HER 1.00/0.95/1.00; SB3 TD3+HER and the no-HER ablation flat at
-  the 0.05 floor. Quote the 50-episode R4 numbers from
-  `results/final_eval_push.md` — that file, not memory, is the source.
+- FetchPush, R4 protocol (`results/final_eval_push.md` — quote the file,
+  not memory): **ours 0.993 ± 0.009** (1.00, 1.00, 0.98) and **SAC+HER
+  0.993 ± 0.009** (1.00, 0.98, 1.00) — an exact tie, differing only in
+  which seed drops one episode. SB3 TD3+HER and the no-HER ablation both
+  sit at the floor, 0.040 ± 0.000.
+- The floor is 0.040 on the R4 protocol and 0.05 in the figures because
+  it's 2/50 versus 1/20 — the same ~4% of initial states that start with
+  the block already inside the 5 cm threshold. If a judge spots the two
+  numbers, that's the answer.
 - FetchPickAndPlace: 0.740, seed 0, same config, no re-tuning.
 - Robustness: 199/200 held-out non-eval initial states
   (`results/failure_sweep.md`). If asked about the one failure: contact

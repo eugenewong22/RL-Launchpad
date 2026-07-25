@@ -183,49 +183,55 @@ R4 mandates ≥50 episodes.</p>
 <code>scripts/diagnose_push.py</code>):</strong> 54% on the identical 50-episode protocol —
 the "simple controller" bar, and not a trivial one: it fails exactly where
 open-loop scripting should, on goals needing re-approach after overshoot.</p>
-<p><strong>FetchPush, 3 seeds × 1M steps</strong> (in-training eval, 20 episodes on the
-fixed eval seeds; 50-episode R4 numbers in <code>results/final_eval.md</code>):</p>
+<p><strong>FetchPush, 3 seeds × 1M steps, on the R4 protocol</strong>
+(<code>results/final_eval_push.md</code>):</p>
 <table>
 <thead>
 <tr>
 <th>Arm</th>
-<th>Final success (per seed)</th>
-<th>Verdict</th>
+<th>Success (mean ± std)</th>
+<th>Per-seed</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>TD3+HER (from scratch)</strong></td>
-<td><strong>1.00, 1.00, 1.00</strong></td>
-<td>Solved, all seeds</td>
+<td><strong>0.993 ± 0.009</strong></td>
+<td>1.00, 1.00, 0.98</td>
 </tr>
 <tr>
 <td>SAC+HER (SB3 baseline)</td>
-<td>1.00, 0.95, 1.00</td>
-<td>Matches us; strongest baseline</td>
+<td>0.993 ± 0.009</td>
+<td>1.00, 0.98, 1.00</td>
 </tr>
 <tr>
 <td>TD3+HER (SB3 baseline)</td>
-<td>0.05, 0.05, 0.05</td>
-<td>Never learned</td>
+<td>0.040 ± 0.000</td>
+<td>0.04, 0.04, 0.04</td>
 </tr>
 <tr>
 <td>TD3 no-HER (our ablation)</td>
-<td>0.05, 0.05, 0.05</td>
-<td>Flat; contact ≤7%</td>
+<td>0.040 ± 0.000</td>
+<td>0.04, 0.04, 0.04</td>
 </tr>
 <tr>
 <td>Scripted classical controller</td>
-<td>0.54 (deterministic)</td>
-<td>Simple-baseline bar</td>
+<td>0.54</td>
+<td>deterministic</td>
 </tr>
 </tbody>
 </table>
+<p>Both floors are one fact at two sample sizes: 2 of the 50 R4 seeds start
+already inside the 5 cm threshold (0.040), as does 1 of the 20 in-training
+seeds (0.05, the floor in the figures) — a policy that never moves scores
+that, not zero.</p>
 <p>Four results, each load-bearing:</p>
 <ol>
 <li><strong>We match the strongest library baseline and beat the classical one</strong>,
    on equal terms: same task, observation/action space, eval seeds and
-   protocol. All three seeds solve; SB3's SAC+HER reaches the same plateau.</li>
+   protocol. The match is exact: both score 0.993 ± 0.009, differing only
+   in which seed drops one episode (ours seed 2, SAC's seed 1). Equality,
+   not superiority — one episode in 150 separates them.</li>
 <li><strong>HER is load-bearing, and we measured how.</strong> The ablation is identical
    except <code>her_k=0</code> and never leaves the floor — object contact in ≤7% of
    episodes (0.07/0.04/0.04) versus 0.95 on every HER seed. Visible in the

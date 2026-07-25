@@ -95,22 +95,29 @@ R4 mandates ≥50 episodes.
 the "simple controller" bar, and not a trivial one: it fails exactly where
 open-loop scripting should, on goals needing re-approach after overshoot.
 
-**FetchPush, 3 seeds × 1M steps** (in-training eval, 20 episodes on the
-fixed eval seeds; 50-episode R4 numbers in `results/final_eval.md`):
+**FetchPush, 3 seeds × 1M steps, on the R4 protocol**
+(`results/final_eval_push.md`):
 
-| Arm | Final success (per seed) | Verdict |
+| Arm | Success (mean ± std) | Per-seed |
 |---|---|---|
-| **TD3+HER (from scratch)** | **1.00, 1.00, 1.00** | Solved, all seeds |
-| SAC+HER (SB3 baseline) | 1.00, 0.95, 1.00 | Matches us; strongest baseline |
-| TD3+HER (SB3 baseline) | 0.05, 0.05, 0.05 | Never learned |
-| TD3 no-HER (our ablation) | 0.05, 0.05, 0.05 | Flat; contact ≤7% |
-| Scripted classical controller | 0.54 (deterministic) | Simple-baseline bar |
+| **TD3+HER (from scratch)** | **0.993 ± 0.009** | 1.00, 1.00, 0.98 |
+| SAC+HER (SB3 baseline) | 0.993 ± 0.009 | 1.00, 0.98, 1.00 |
+| TD3+HER (SB3 baseline) | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
+| TD3 no-HER (our ablation) | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
+| Scripted classical controller | 0.54 | deterministic |
+
+Both floors are one fact at two sample sizes: 2 of the 50 R4 seeds start
+already inside the 5 cm threshold (0.040), as does 1 of the 20 in-training
+seeds (0.05, the floor in the figures) — a policy that never moves scores
+that, not zero.
 
 Four results, each load-bearing:
 
 1. **We match the strongest library baseline and beat the classical one**,
    on equal terms: same task, observation/action space, eval seeds and
-   protocol. All three seeds solve; SB3's SAC+HER reaches the same plateau.
+   protocol. The match is exact: both score 0.993 ± 0.009, differing only
+   in which seed drops one episode (ours seed 2, SAC's seed 1). Equality,
+   not superiority — one episode in 150 separates them.
 2. **HER is load-bearing, and we measured how.** The ablation is identical
    except `her_k=0` and never leaves the floor — object contact in ≤7% of
    episodes (0.07/0.04/0.04) versus 0.95 on every HER seed. Visible in the
