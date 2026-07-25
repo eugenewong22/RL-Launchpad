@@ -33,9 +33,11 @@ clone in under 15 minutes.
 ## 2. Approach
 
 **Algorithm: TD3 + Hindsight Experience Replay, written from scratch in
-PyTorch** (`src/agent/`, ~500 lines). Training loop, replay buffer, HER
-relabeling, networks, and update rule are all ours; only autograd, Adam,
-and the simulator are library code (per R1).
+PyTorch** (`src/agent/`, 680 lines). Training loop, replay buffer, HER
+relabeling, networks, normalizer, and update rule are all ours; the only
+imports are `torch`, `numpy`, `gymnasium`/`gymnasium-robotics`, `yaml`
+and the standard library, so autograd, Adam and the simulator are the
+entire extent of the library code (per R1).
 
 ```
                     ┌─────────────────────────────┐
@@ -96,9 +98,13 @@ does not license us to conclude.
 eval protocol: deterministic policy, 50 episodes, eval seeds 10000–10049,
 disjoint from all training seeds (R4).*
 
-**Correctness gate (FetchReach):** 100% success from 7.5k env steps,
-sustained through 50k, 1.9 min wall-clock on laptop CPU
-(`results/reach_smoke_seed0/`).
+**Correctness gate (FetchReach):** first 10/10 in-training eval at 7.5k
+env steps, holding 10/10 for 17 of the 19 subsequent evals (the two
+exceptions are 8/10 at 10k and 9/10 at 47.5k — 10-episode samples, so one
+or two episodes of noise, not regression). 1.9 min wall-clock on laptop
+CPU (`results/reach_smoke_seed0/`). On the 50-episode R4 protocol the same
+checkpoint scores **0.98**, and the gap between that and the 10-episode
+1.00 is a small live demonstration of why R4 mandates ≥50 episodes.
 
 **Classical baseline (scripted two-phase push controller,
 `scripts/diagnose_push.py`):** 54% success on the identical 50-episode
