@@ -140,7 +140,7 @@ into <code>results/config_diff.md</code>):</p>
 <td><code>action_l2</code></td>
 <td>—</td>
 <td><strong>1.0</strong></td>
-<td>penalizes the squared action magnitude — direct counter-pressure to tanh saturation</td>
+<td>penalizes squared action magnitude; intended as anti-saturation, but §5 finds it not individually necessary</td>
 </tr>
 <tr>
 <td><code>normalize_obs</code></td>
@@ -158,7 +158,7 @@ into <code>results/config_diff.md</code>):</p>
 <td><code>random_eps</code></td>
 <td>—</td>
 <td><strong>0.3</strong></td>
-<td>30% fully-random actions, sustained, not annealed</td>
+<td>30% fully-random actions, sustained — <strong>the one change §5's ablation shows is necessary</strong></td>
 </tr>
 </tbody>
 </table>
@@ -301,14 +301,11 @@ slow seed, and the 120k gap in means is smaller than either arm's own
 spread, with the ±1σ bands overlapping across the whole rise. The
 defensible claim is that we <strong>match</strong> SAC+HER on final success and sample
 efficiency — n=3 cannot resolve a difference this size. One qualitative
-difference is real: SAC leaves the floor earlier (~150k vs ~250k) but
-climbs more gradually, crossing us around 400k — the expected signature of
-entropy-driven exploration versus a deterministic actor that needs its
-first successes before it commits.</p>
+difference is real: SAC leaves the floor earlier (~150k vs ~250k) but climbs
+more gradually, crossing us around 400k — entropy-driven exploration versus
+a deterministic actor that needs its first successes before it commits.</p>
 <h2>4. Constraints</h2>
 <ul>
-<li><strong>Sample efficiency:</strong> all curves share the env-steps x-axis; the
-  no-HER ablation shows what the relabeling buys per step.</li>
 <li><strong>Compute honesty (R6):</strong> every arm ran 1M env steps — identical
   budgets, so the comparison is on equal terms. Wall-clock (CPU-only
   throughout; per-run hardware in <code>results/compute_table.md</code>):</li>
@@ -351,24 +348,19 @@ first successes before it commits.</p>
   assume more hardware would have helped.
 - <strong>Control rate:</strong> ~0.1 ms/action on CPU, far inside a 25 Hz budget.</p>
 <h2>5. Honesty &amp; Trajectory</h2>
-<p><strong>Known failure modes.</strong> Across <strong>600</strong> held-out initial states — env
-seeds 2000–2199 run against all three policies, disjoint from the training
-and R4 eval seeds — there is exactly <strong>one</strong> failure: seed 0 on state 2081
-(<code>results/push_failure_seed2081.mp4</code>, full sweep in
-<code>results/failure_sweep.md</code>).</p>
-<p>The mechanism is <strong>contact without sustained pushing</strong>, not overshoot. The
-gripper reaches the block normally (closest approach 0.043 m — touching)
-then delivers only 17% of the required displacement: 0.298 m → 0.248 m in
-three increments separated by long stationary stretches, against a 0.05 m
-threshold. The block never passes the goal, so nothing is left uncorrected;
-the policy simply stops generating lateral force while in contact.</p>
-<p>Running every state against every seed tells us what one seed could not:
-<strong>seeds 1 and 2 both solve state 2081.</strong> It is therefore not an
-intrinsically hard state, and push distance does not explain it either —
-every other state needing &gt;0.25 m succeeds on every seed, including one
-needing 0.375 m. The failure is a property of seed 0's learned policy, not
-of the task — we localize it that far and no further, and from a single
-instance decline to invent a cause.</p>
+<p><strong>Known failure modes.</strong> Across <strong>600</strong> held-out initial states (env seeds
+2000–2199 against all three policies, disjoint from training and R4 eval
+seeds) there is exactly <strong>one</strong> failure: seed 0 on state 2081
+(<code>results/push_failure_seed2081.mp4</code>; sweep in <code>results/failure_sweep.md</code>).</p>
+<p>The mechanism is <strong>contact without sustained pushing</strong>, not overshoot: the
+gripper reaches the block (closest approach 0.043 m) then delivers 17% of
+the required displacement, 0.298 m → 0.248 m against a 0.05 m threshold,
+never pushing it past the goal. Running every state against every seed tells
+us what one seed could not — <strong>seeds 1 and 2 both solve state 2081</strong>, and
+every other state needing &gt;0.25 m succeeds on every seed. So it is neither
+an intrinsically hard state nor a push-distance limit; it is a property of
+seed 0's policy. We localize it that far and, from one instance, decline to
+invent a cause.</p>
 <p><strong>Negative results (found the hard way, diagnosed systematically):</strong>
 Our first full FetchPush campaign — from-scratch TD3+HER, an SB3 TD3+HER
 baseline, and a no-HER ablation, 1M env steps each — all flat-lined at
@@ -381,16 +373,23 @@ Sustained ε-random exploration alone did not fix it (block moved in 0/50
 episodes — a collapsed policy acts as a restoring force against per-step
 random actions).</p>
 <p><img alt="the campaign that failed" src="../results/negative_result.png" /></p>
-<p>That diagnosis shaped the final design (§2): action-L2 and a 10× faster
-target-update rate attack the saturation directly, observation
-normalization removes the scale mismatch feeding it, and wider noise plus
-sustained ε-random mixing keep the buffer off the degenerate policy's own
-trajectories.</p>
-<p>Two limits we state rather than hide. We changed five things at once under
-deadline and did not ablate them individually, so we know the package works
-but cannot apportion credit inside it — that sweep is the first thing more
-compute would buy. And the failed runs are committed rather than deleted,
-the figure regenerated from their CSVs, so this section is checkable.</p>
+<p>That diagnosis shaped the final design (§2) — and we then ablated it, one
+setting at a time (<code>results/stabilizer_ablation.md</code>). <strong>Exactly one of the
+five is necessary.</strong> Reverting <code>random_eps</code> alone puts the run back on the
+floor for all 1M steps at 3% object contact: the original failure
+reproduced by a one-line change. The other four are individually removable.
+Dropping observation normalization only doubles the cost — 910k steps to a
+durable 0.9 against the reported 450k — and <code>action_l2</code>, <code>tau</code> and
+<code>expl_noise</code> all land inside the reported config's own three-seed spread
+(410–600k), so at n=1 there is no evidence they matter alone.</p>
+<p>Necessary is not sufficient: adding ε-random mixing to the <em>broken</em> config
+did not rescue it either (block moved in 0/50). It is required, and needs
+at least one of the others with it. The honest reading is that <strong>we
+over-corrected</strong> — five changes where the evidence supports one, plus one
+that buys sample efficiency. We report that rather than present the package
+as if it had been tuned. One seed per arm identifies a collapse, not small
+effects. The failed runs stay committed, and every figure here regenerates
+from their CSVs.</p>
 <p><strong>With two more weeks:</strong> (1) the single-factor stabilizer sweep above;
 (2) PickAndPlace to 3 seeds — the code path is identical, only the config
 changes; (3) a vision-from-pixels variant, swapping the 13-D state for a

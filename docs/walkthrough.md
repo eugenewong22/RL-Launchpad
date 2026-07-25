@@ -57,12 +57,14 @@ value surface. We use only Q1 — using min(Q1,Q2) here buys little
 (the pessimism matters for **targets**, not for the ascent direction)
 and costs a second forward pass. The actor updates every second critic
 update ('delayed'), so it always climbs a partially-converged, less
-exploitable landscape. The L2 term penalizes action magnitude: under
-sparse rewards the early critic surface is garbage, and without this
-term the actor climbs it to the tanh boundary and pins there with
-vanishing gradients — we measured exactly that failure (mean |action|
-= 1.0, gripper parked 1.6 m from the block) before adding it. It's the
-`action_l2` stabilizer from the reference HER implementation."*
+exploitable landscape. The L2 term penalizes action magnitude, the
+`action_l2` stabilizer from the reference HER implementation. We added it
+after measuring the actor saturate — mean |action| = 1.0, gripper parked
+1.6 m from the block — on the theory that it was the counter-pressure to
+that. Be careful here if asked: our own ablation
+(`results/stabilizer_ablation.md`) shows removing it alone costs nothing
+measurable, so it is not what rescues the run. The necessary one turned
+out to be sustained ε-random exploration."*
 
 ## Architecture decisions (pick any one)
 
@@ -116,20 +118,30 @@ and porting them into SB3 was out of scope. Saying anything stronger would
 be claiming an experiment we didn't do."*
 
 **"You changed five things at once. Which one mattered?"**
-*"We can't apportion credit and we say so in the write-up. We had one
-deadline and one cluster allocation, so we shipped the package and
-verified it works. The single-factor sweep is the first thing we'd run
-with more compute. What we can defend is the mechanism: we measured the
-actor saturated at mean |action| = 1.0 with the gripper parked 1.6 m from
-the block, and action-L2 plus the faster target rate attack that directly."*
+*"We ran that ablation — `results/stabilizer_ablation.md`, one arm per
+setting. Exactly one is necessary: sustained ε-random mixing. Revert
+`random_eps` to 0 and the run sits on the floor for all 1M steps at 3%
+contact, which is the original failure exactly. The other four you can
+remove individually and it still solves the task. Dropping observation
+normalization doubles the steps to a durable 0.9, 910k against 450k, but
+still gets there. So we over-corrected — and we say that rather than
+pretend the package was tuned."*
+
+**"Then was your original diagnosis wrong?"**
+*"Partly, and we corrected the write-up. We'd described action-L2 as the
+direct counter-pressure to saturation; the ablation says removing it alone
+costs nothing measurable. What survives is narrower and better supported:
+the collapse is an exploration failure, and sustained random actions are
+what prevent it. Note it's necessary but not sufficient — adding ε-random
+to the broken config didn't rescue it either, so it needs at least one of
+the others alongside."*
 
 **"τ=0.05 is 10× the usual value. Justify it."**
 *"It's the value the reference HER implementations use for Fetch, not
-something we tuned into. The intuition: with a saturated actor and slow
-targets, the critic's bootstrapped estimates stay self-consistent for a
-long time — targets barely move, so nothing contradicts the bad policy.
-Faster target tracking makes the value estimate follow the online critic
-closely enough that the contradiction shows up."*
+something we tuned into — and honestly, our ablation says it isn't doing
+much: reverting it to 0.005 still solves the task at 390k steps, inside our
+own seed spread. We kept it because it matches the reference, not because
+we can show it earns its place."*
 
 **"How do you know HER is what's doing the work, and not the stabilizers?"**
 *"Because the no-HER ablation has all five stabilizers and still never

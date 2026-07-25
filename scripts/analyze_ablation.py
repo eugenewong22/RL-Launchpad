@@ -189,23 +189,92 @@ def main():
             f"{fmt(broken['contact'], '{:.2f}')} | **collapses** |"
         )
 
+    # The conclusions are derived, not written: the first four arms showed no
+    # collapse and a hardcoded "no single setting is necessary" would have
+    # survived into the report once the fifth arm contradicted it.
+    collapsed = [r for r in rows if r["drop"] > TOLERANCE or not r["reach90"]]
+    slower = [
+        r for r in rows
+        if r not in collapsed and band and r["reach90"] and r["reach90"] > band[1]
+    ]
+    noise = [r for r in rows if r not in collapsed and r not in slower]
+
     lines += [
         "",
         "`contact` is `contact_frac`, the fraction of episodes that moved the "
-        "block. It stays high in every single-factor arm — so actor saturation, "
-        "the mechanism the original campaign died of, does not recur when only "
-        "one setting is reverted.",
+        "block — the mechanism signal, since the original campaign died with a "
+        "saturated actor that never reached the block.",
         "",
-        "**What this does and does not license.** No single reversion "
-        "reproduces the collapse, so no one setting is *necessary*. That is not "
-        "the same as the changes not mattering: the all-five-reverted control "
-        "flat-lined at the floor on three independent arms, so the failure was "
-        "real and reproducible. Two explanations remain indistinguishable at "
-        "n=1 per arm — genuine redundancy (several mechanisms each suffice), or "
-        "a collapse fragile enough that almost any perturbation escapes it. "
-        "Separating them needs 3 seeds per arm.",
+        "## What this shows",
         "",
     ]
+
+    if len(collapsed) == 1:
+        c = collapsed[0]
+        lines += [
+            f"**Exactly one of the five is necessary.** Reverting `{c['key']}` "
+            f"({c['from']!r} → {c['to']!r}) puts the run back on the floor for "
+            f"all 1M steps at contact {c['contact']:.2f} — the original "
+            "campaign's failure reproduced by a single-line change. The other "
+            f"{len(rows) - 1} are individually removable: the agent still "
+            "solves the task without any one of them.",
+            "",
+        ]
+    elif collapsed:
+        lines += [
+            "**Necessary settings:** "
+            + ", ".join(f"`{c['key']}`" for c in collapsed)
+            + " — reverting any one of these alone reproduces the collapse.",
+            "",
+        ]
+    else:
+        lines += [
+            "**No single reversion reproduces the collapse**, so no one setting "
+            "is individually necessary. That is not the same as the changes not "
+            "mattering — the all-five-reverted control flat-lined on three "
+            "independent arms — but with n=1 per arm we cannot separate genuine "
+            "redundancy from a collapse fragile enough that any perturbation "
+            "escapes it.",
+            "",
+        ]
+
+    if slower:
+        lines += [
+            "**Costly but not necessary:** "
+            + ", ".join(
+                f"`{s['key']}` ({s['reach90'] / reported['reach90']:.1f}x the "
+                f"steps to a durable 0.9)" for s in slower
+            )
+            + ". The task is still solved by 1M steps, so this would be "
+            "invisible in the final number alone.",
+            "",
+        ]
+    if noise:
+        lines += [
+            "**Not individually load-bearing:** "
+            + ", ".join(f"`{n['key']}`" for n in noise)
+            + f". Each lands inside the reported config's own seed spread "
+            f"({band[0]:,}–{band[1]:,} steps), so at n=1 there is no evidence "
+            "any of them changes the outcome on its own." if band else "",
+            "",
+        ]
+
+    lines += [
+        "**Necessary is not sufficient.** During the original diagnosis, adding "
+        "sustained ε-random exploration to the *broken* config did not rescue "
+        "it (the block moved in 0/50 episodes — a collapsed policy acts as a "
+        "restoring force against per-step random actions). Removing it from the "
+        "*working* config breaks it. Both are true: it is required, and it "
+        "needs at least one of the others alongside it.",
+        "",
+        f"Caveat: one seed per arm. That is enough to identify a collapse "
+        f"({collapsed[0]['key'] if len(collapsed) == 1 else 'above'} is "
+        "unambiguous — floor for 1M steps) and enough to rule out large "
+        "effects, but not to resolve small ones. Three seeds per arm would "
+        "settle the middle ground.",
+        "",
+    ]
+
     if missing:
         # Must be in the FILE, not just stdout: a report that silently omits
         # an arm reads as a complete result to anyone who did not watch it
