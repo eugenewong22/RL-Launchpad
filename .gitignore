@@ -9,3 +9,7 @@ results/scratch_*.mp4
 # SLURM job stdout from the cluster runs; the reported evidence is the
 # committed progress.csv / config.yaml under results/, not these.
 logs/
+# Stabilizer-ablation weights. The ablation's evidence is the learning curve
+# in progress.csv, which IS committed; no reported number depends on these
+# checkpoints, and 5 arms x 3.6 MB of churn is not worth carrying.
+results/ablate_*/checkpoint_*.pt

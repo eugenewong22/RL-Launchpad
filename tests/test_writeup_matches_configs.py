@@ -307,3 +307,31 @@ def test_agent_line_count_claim_is_roughly_right(writeup):
     assert abs(claimed - actual) <= 0.05 * actual, (
         f"writeup claims ~{claimed} lines in src/agent/, actual is {actual}"
     )
+
+
+# Files the submission is judged on. A deliverable that exists but is
+# unreachable from the README is, for a judge's purposes, missing —
+# results/demo_final.mp4 sat in the repo referenced by nothing.
+REQUIRED_DELIVERABLES = [
+    "docs/writeup.md",
+    "results/demo_final.mp4",
+    "results/final_eval_push.md",
+    "results/learning_curves.png",
+]
+
+
+@pytest.mark.parametrize("path", REQUIRED_DELIVERABLES)
+def test_deliverable_exists_and_is_reachable_from_readme(path):
+    import subprocess
+
+    assert (ROOT / path).exists(), f"missing deliverable: {path}"
+    tracked = subprocess.run(
+        ["git", "ls-files", path], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert tracked, f"{path} exists locally but is not committed — absent from a clone"
+
+    readme = (ROOT / "README.md").read_text()
+    assert path in readme, (
+        f"{path} is committed but the README never mentions it; a judge has no "
+        "path to it. Link it from README.md."
+    )

@@ -62,6 +62,19 @@ uv run python scripts/record_video.py \
     --env-id FetchPush-v4 --episodes 5 --out results/demo.mp4
 ```
 
+## Demo video
+
+**[`results/demo_final.mp4`](results/demo_final.mp4)** — 47 s. FetchPush
+successes, a labelled failure case, and the PickAndPlace stretch task, all
+rendered by `scripts/record_video.py` from the same checkpoints the numbers
+below come from (R4). The closing results card reads its figures from
+`results/final_eval_push.md`, so it cannot disagree with the table.
+
+Rebuild it with `uv run python scripts/make_demo.py`. One caveat stated on
+the clip itself: the failure episode comes from held-out seeds 2000+, not
+the reported 50 — those contain no seed-0 failure, so finding one required
+looking outside them.
+
 ## Results
 
 FetchPush-v4, 50 episodes × 3 seeds on eval seeds 10000–10049, disjoint
@@ -75,9 +88,12 @@ from training (`results/final_eval_push.md`):
 | TD3 no-HER — our ablation | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
 | Scripted classical controller | 0.54 | deterministic |
 
+![FetchPush learning curves](results/learning_curves.png)
+
 We **match** SB3's SAC+HER — the tie is exact on both mean and std, and the
 per-seed vectors differ only in which seed drops one episode. We do not
-claim to beat it.
+claim to beat it. Both figures regenerate from the committed CSVs with
+`uv run python scripts/make_plots.py`.
 
 The SB3 **TD3**+HER arm did not learn in 1M steps at its published
 settings. Our own TD3+HER was equally flat at those settings until we
