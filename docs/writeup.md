@@ -169,11 +169,29 @@ and the honest analysis of why. -->
 
 ## 5. Honesty & Trajectory
 
-**Known failure modes:** on 200 held-out (non-eval) initial states the
-seed-0 policy fails once (~0.5%): seed 2081, captured in
-`results/push_failure_seed2081.mp4`. <!-- TODO: describe the failure
-mechanically after watching the clip (e.g. overshoot without re-approach),
-and re-check across seeds 1-2 once the matrix lands. -->
+**Known failure modes:** on 200 held-out initial states (env seeds
+2000–2199, disjoint from both the training seeds and the R4 eval seeds)
+the seed-0 policy fails once — 0.5%, seed 2081, captured in
+`results/push_failure_seed2081.mp4`. Regenerate with
+`uv run python scripts/failure_sweep.py`.
+
+The mechanism is **contact without sustained pushing**, not an overshoot.
+The gripper reaches the block normally — closest approach 0.043 m, i.e.
+touching — and then delivers only 17% of the required displacement: the
+block advances 0.298 m → 0.248 m in three small increments separated by
+long stationary stretches, against a 0.05 m success threshold. It is
+never pushed past the goal, so the policy is not overshooting and failing
+to re-approach; it simply stops generating lateral force while in
+contact.
+
+We looked for a cause and did not find one we can defend. The failing
+state needs a 0.298 m push, placing it in the longest quintile — but 41
+of the 42 other states requiring >0.25 m succeed, including states
+requiring 0.375 m, further than the one that fails. Required push
+distance therefore does not explain it. With a single failure in 200 we
+report the mechanism and decline to attribute a cause.
+<!-- TODO: re-run the sweep for seeds 1-2 once their checkpoints are off
+the cluster; scripts/failure_sweep.py already skips them cleanly. -->
 
 **Negative results (found the hard way, diagnosed systematically):**
 Our first full FetchPush campaign — from-scratch TD3+HER, an SB3 TD3+HER
