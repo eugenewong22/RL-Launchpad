@@ -81,7 +81,8 @@ def main():
     if not broken_root.exists():
         raise SystemExit(f"{broken_root} not found — nothing to plot")
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # Wide/short to match make_plots.py — see the note there.
+    fig, ax = plt.subplots(figsize=(9, 3.0))
 
     for run, (label, color, dashes) in ARMS.items():
         csv_path = broken_root / run / "progress.csv"
@@ -114,7 +115,7 @@ def main():
     ax.set_ylabel("Eval success rate")
     ax.set_ylim(-0.05, 1.05)
     ax.set_title("FetchPush-v4: the first campaign flat-lined on every arm")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, fontsize=9)
+    ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
     ax.grid(alpha=0.3)
     fig.tight_layout()
     out_png = res / "negative_result.png"

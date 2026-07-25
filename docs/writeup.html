@@ -1,0 +1,413 @@
+<!doctype html>
+<html><head><meta charset='utf-8'>
+<title>From-Scratch TD3 + HER on Sparse-Reward Fetch Manipulation</title>
+<style>
+@page { size: Letter; margin: 0.65in; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  width: 691px; margin: 0 auto; padding: 0;
+  font: 9.5pt/1.30 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #111; background: #fff;
+}
+#page-ruler { position: absolute; left: 0; top: 0; width: 0; visibility: hidden; }
+h1 { font-size: 16pt; margin: 0 0 2pt; line-height: 1.2; }
+h2 { font-size: 12pt; margin: 10pt 0 3pt; border-bottom: 1px solid #ccc;
+      padding-bottom: 2pt; page-break-after: avoid; }
+h3 { font-size: 10.5pt; margin: 8pt 0 3pt; page-break-after: avoid; }
+p { margin: 0 0 4pt; text-align: justify; }
+ul, ol { margin: 0 0 4pt; padding-left: 16pt; }
+li { margin-bottom: 2pt; }
+em { color: #444; }
+code { font: 8.7pt/1.3 "SF Mono", Menlo, Consolas, monospace; background: #f2f3f5;
+        padding: 0 2px; border-radius: 2px; }
+pre { background: #f7f8fa; border: 1px solid #e2e4e8; border-radius: 3px;
+       padding: 5pt 7pt; overflow-x: auto; page-break-inside: avoid;
+       margin: 0 0 6pt; }
+pre code { background: none; padding: 0; font-size: 8.2pt; line-height: 1.28; }
+/* Rows stay intact; tables may break *between* rows. Table-level avoid
+   would shove a 380px table whole onto the next page and waste the
+   remainder of this one. */
+table { border-collapse: collapse; width: 100%; margin: 0 0 6pt;
+         font-size: 8.3pt; }
+tr { page-break-inside: avoid; }
+thead { display: table-header-group; }
+th, td { border: 1px solid #d6d9de; padding: 2pt 3.5pt; text-align: left;
+          vertical-align: top; }
+th { background: #f2f3f5; font-weight: 600; }
+img { max-width: 100%; display: block; margin: 4pt auto 6pt;
+       page-break-inside: avoid; }
+blockquote { margin: 0 0 5pt; padding-left: 8pt; border-left: 2px solid #ccc;
+              color: #444; }
+hr { border: 0; border-top: 1px solid #ccc; margin: 8pt 0; }
+</style></head>
+<body>
+<div id='page-ruler'></div>
+<h1>From-Scratch TD3 + HER on Sparse-Reward Fetch Manipulation</h1>
+<p><em>LaunchPad 2026 — Griffin Labs RL-From-Scratch track. ≤4 pages.</em></p>
+<h2>1. Problem</h2>
+<p>Contact-rich tabletop manipulation with <strong>sparse rewards</strong>: a 7-DoF Fetch
+arm must push a block to a commanded 3-D goal (<code>FetchPush-v4</code>, stock task,
+no modifications), reward −1 every step until the block is within 5 cm of
+the goal, then 0. This is where scripted automation breaks — a
+pre-programmed push assumes fixed block and goal poses, and any
+perturbation invalidates the contact schedule. A policy must perceive the
+current configuration and re-plan the contact through it.</p>
+<p>Why the obvious approaches fall short: <strong>scripted control</strong> computes
+waypoints that don't react to the randomized block and goal poses;
+<strong>dense-reward RL</strong> needs hand-shaping that is per-task engineering and a
+known reward-hacking source; <strong>vanilla off-policy RL</strong> almost never sees a
+success on sparse reward and cannot bootstrap value — our no-HER ablation
+quantifies exactly that.</p>
+<p><strong>Success criteria, fixed before building:</strong> (a) match the SB3 baseline's
+mean±std band at 1M env steps over 3 seeds × 50 fixed eval episodes;
+(b) the no-HER ablation clearly underperforms; (c) a judge reproduces our
+eval from a clean clone in under 15 minutes.</p>
+<h2>2. Approach</h2>
+<p><strong>Algorithm: TD3 + Hindsight Experience Replay, written from scratch in
+PyTorch</strong> (<code>src/agent/</code>, 680 lines). Training loop, replay buffer, HER
+relabeling, networks, normalizer, and update rule are all ours; the only
+imports are <code>torch</code>, <code>numpy</code>, <code>gymnasium</code>/<code>gymnasium-robotics</code>, <code>yaml</code>
+and the standard library, so autograd, Adam and the simulator are the
+entire extent of the library code (per R1).</p>
+<pre><code>                    ┌─────────────────────────────┐
+ obs(10) ┐          │ Actor: 13 → 256 → 256 → 4   │ → tanh·max_action → a
+ goal(3) ┴ s(13) ──▶├─────────────────────────────┤
+                    │ Critic₁: 13+4 → 256 → 256 →1│ ┐
+                    │ Critic₂: 13+4 → 256 → 256 →1│ ┴→ min(Q₁,Q₂) targets
+                    └─────────────────────────────┘
+   (+ Polyak target copies of all three, τ=0.05 — not the SB3 default
+    0.005, see below; running obs-normalization sits in front of s)
+</code></pre>
+<p>Each major decision, with the alternative we ruled out:</p>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Why</th>
+<th>Rejected alternative &amp; its shortcoming</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Off-policy + HER</td>
+<td>Sparse goal-conditioned reward: relabeling failed episodes with achieved goals is the only signal source</td>
+<td>PPO (on-policy): cannot reuse relabeled experience; dense shaping: reward engineering we'd have to defend per-task</td>
+</tr>
+<tr>
+<td>TD3 over SAC</td>
+<td>Fewer moving parts under a deadline; deterministic eval</td>
+<td>SAC: one more tunable (entropy temperature), stochastic eval adds R4 variance. <strong>In hindsight, the costly choice</strong> — a deterministic actor is exactly what saturates under sparse reward (§5), and SAC's entropy bonus is structurally immune. Same final performance, but SAC would have got there without the stabilizers below.</td>
+</tr>
+<tr>
+<td>HER <code>future</code>, k=4</td>
+<td>Relabels 80% of sampled transitions from later same-episode states; the paper's strategy</td>
+<td><code>final</code>: fewer distinct goals per episode, weak coverage near trajectory ends</td>
+</tr>
+<tr>
+<td>MLP 256-256, relabel at sample time</td>
+<td>State is 13-D — capacity isn't the bottleneck, stability is; sampling fresh counterfactual goals each epoch beats freezing k copies at store time (k× memory)</td>
+<td>Deeper/wider nets: slower, no gain at this input size</td>
+</tr>
+<tr>
+<td>1 grad step per env step</td>
+<td>Matches SB3's throughput → fair same-x-axis comparison</td>
+<td>Higher ratios: better sample efficiency, but confounds R2</td>
+</tr>
+</tbody>
+</table>
+<p>Not built, deliberately: distributional critics, prioritized replay,
+parallel envs — the baseline comparison, not peak performance, is the claim.</p>
+<p><strong>Hyperparameters, and where we deviate.</strong> We started from SB3's published
+tuned Fetch values; that configuration <strong>did not learn</strong> (§5). The reported
+runs deviate in five places (diff generated from the two committed configs
+into <code>results/config_diff.md</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Failed</th>
+<th>Reported</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tau</code></td>
+<td>0.005</td>
+<td><strong>0.05</strong></td>
+<td>10× faster target tracking; slow targets let a saturated actor's value estimates stay self-consistent</td>
+</tr>
+<tr>
+<td><code>action_l2</code></td>
+<td>—</td>
+<td><strong>1.0</strong></td>
+<td>penalizes mean</td>
+</tr>
+<tr>
+<td><code>normalize_obs</code></td>
+<td>—</td>
+<td><strong>true</strong></td>
+<td>Fetch positions and velocities differ by ~2 orders of magnitude</td>
+</tr>
+<tr>
+<td><code>expl_noise</code></td>
+<td>0.1</td>
+<td><strong>0.2</strong></td>
+<td>wider Gaussian exploration</td>
+</tr>
+<tr>
+<td><code>random_eps</code></td>
+<td>—</td>
+<td><strong>0.3</strong></td>
+<td>30% fully-random actions, sustained, not annealed</td>
+</tr>
+</tbody>
+</table>
+<p>γ=0.95, lr=1e-3, batch 256, buffer 1e6, network width, policy delay and
+target-noise clipping are unchanged from SB3. Every reported from-scratch
+run — three FetchPush seeds, the no-HER ablation, PickAndPlace — uses this
+identical config; nothing was tuned per task or per seed. These five are
+<em>ours</em>, so the SB3 TD3+HER baseline does not have them; §3 covers what that
+does and does not license us to conclude.</p>
+<h2>3. Evidence</h2>
+<p><em>All numbers regenerate from committed CSVs via <code>scripts/make_plots.py</code>;
+eval protocol: deterministic policy, 50 episodes, eval seeds 10000–10049,
+disjoint from all training seeds (R4).</em></p>
+<p><strong>Correctness gate (FetchReach):</strong> first 10/10 in-training eval at 7.5k
+env steps, holding 10/10 for 17 of the 19 later evals (exceptions: 8/10 at
+10k, 9/10 at 47.5k — 10-episode samples, so noise, not regression), 1.9 min
+on laptop CPU. On the 50-episode R4 protocol the same checkpoint scores
+<strong>0.98</strong> — the gap from the 10-episode 1.00 is a live demonstration of why
+R4 mandates ≥50 episodes.</p>
+<p><strong>Classical baseline (scripted two-phase push controller,
+<code>scripts/diagnose_push.py</code>):</strong> 54% on the identical 50-episode protocol —
+the "simple controller" bar, and not a trivial one: it fails exactly where
+open-loop scripting should, on goals needing re-approach after overshoot.</p>
+<p><strong>FetchPush, 3 seeds × 1M steps</strong> (in-training eval, 20 episodes on the
+fixed eval seeds; 50-episode R4 numbers in <code>results/final_eval.md</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Final success (per seed)</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>TD3+HER (from scratch)</strong></td>
+<td><strong>1.00, 1.00, 1.00</strong></td>
+<td>Solved, all seeds</td>
+</tr>
+<tr>
+<td>SAC+HER (SB3 baseline)</td>
+<td>1.00, 0.95, 1.00</td>
+<td>Matches us; strongest baseline</td>
+</tr>
+<tr>
+<td>TD3+HER (SB3 baseline)</td>
+<td>0.05, 0.05, 0.05</td>
+<td>Never learned</td>
+</tr>
+<tr>
+<td>TD3 no-HER (our ablation)</td>
+<td>0.05, 0.05, 0.05</td>
+<td>Flat; contact ≤7%</td>
+</tr>
+<tr>
+<td>Scripted classical controller</td>
+<td>0.54 (deterministic)</td>
+<td>Simple-baseline bar</td>
+</tr>
+</tbody>
+</table>
+<p>Four results, each load-bearing:</p>
+<ol>
+<li><strong>We match the strongest library baseline and beat the classical one</strong>,
+   on equal terms: same task, observation/action space, eval seeds and
+   protocol. All three seeds solve; SB3's SAC+HER reaches the same plateau.</li>
+<li><strong>HER is load-bearing, and we measured how.</strong> The ablation is identical
+   except <code>her_k=0</code> and never leaves the floor — object contact in ≤7% of
+   episodes (0.07/0.04/0.04) versus 0.95 on every HER seed. Visible in the
+   logged <code>contact_frac</code>, not inferred.</li>
+<li><strong>Two independent TD3+HER implementations fail at the same
+   hyperparameters — which points at the config, not either codebase.</strong>
+   SB3's TD3+HER is flat on all three seeds; so was <em>ours</em>, on the same task
+   and budget, until the five changes in §2 (flat curves in §5; the runs
+   are committed under <code>results/archive_broken_config/</code>). We diagnosed the
+   mechanism in our own code, where we could instrument it: the actor had
+   <strong>saturated</strong>, mean |action| = 1.0, tanh gradients dead.</li>
+</ol>
+<p>We therefore claim only that the SB3 defaults do not train TD3+HER on
+   FetchPush in 1M steps, and that two implementations agree on it. We do
+   <strong>not</strong> claim our five changes would fix SB3's TD3+HER — we never ran
+   that experiment. That arm is a <em>failed baseline configuration</em>, not an
+   ablation of our additions, and the ~20× gap against it is <strong>not</strong>
+   evidence that our implementation beats TD3+HER as published. Our fair
+   comparison is SAC+HER, which we match. Reporting the gap as a win would
+   be the easiest way to mislead a reader here, so we say plainly it isn't.
+4. <strong>Deterministic-actor methods need those stabilizers here; SAC does
+   not</strong> — its entropy-regularized stochastic policy cannot saturate the way
+   a deterministic actor does, which is why it is the one out-of-the-box
+   baseline that works. That is the non-obvious insight this project
+   produced, and it is why §2 records TD3-over-SAC as the costly choice.</p>
+<p><strong>Beyond the protocol:</strong> 199/200 held-out non-eval initial states solved
+(~0.5% failure; <code>results/failure_sweep.md</code>, dissected in §5). <strong>Stretch
+task — FetchPickAndPlace</strong>, same config, zero re-tuning: seed 0 = <strong>0.740</strong>
+at 1M steps (plateau 70–75%; grasping and in-air goals, so no pushing
+shortcut exists). One config transferring across two contact tasks is
+evidence the recipe, not per-task tuning, is doing the work.</p>
+<p><img alt="learning curves" src="../results/learning_curves.png" /></p>
+<p><strong>Reading the curves.</strong> Both working arms are flat at the floor while the
+buffer fills with relabeled failures, then rise sharply once HER has enough
+near-goal experience to bootstrap from. On the mean curve we hit 0.5 at
+390k env steps to SAC's 440k, and 0.9 at 550k to 670k — but we do <strong>not</strong>
+claim a sample-efficiency win, because per-seed steps to a durable 0.9
+(reached, never dropping below 0.8 again) don't support it:</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>seed 0</th>
+<th>seed 1</th>
+<th>seed 2</th>
+<th>spread</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TD3+HER (ours)</td>
+<td>450k</td>
+<td>410k</td>
+<td>600k</td>
+<td>190k</td>
+</tr>
+<tr>
+<td>SAC+HER (SB3)</td>
+<td>380k</td>
+<td>760k</td>
+<td>650k</td>
+<td>380k</td>
+</tr>
+</tbody>
+</table>
+<p>SAC's <em>fastest</em> seed beats our fastest; our better mean rides on SAC's one
+slow seed, and the 120k gap in means is smaller than either arm's own
+spread, with the ±1σ bands overlapping across the whole rise. The
+defensible claim is that we <strong>match</strong> SAC+HER on final success and sample
+efficiency — n=3 cannot resolve a difference this size. One qualitative
+difference is real: SAC leaves the floor earlier (~150k vs ~250k) but
+climbs more gradually, crossing us around 400k — the expected signature of
+entropy-driven exploration versus a deterministic actor that needs its
+first successes before it commits.</p>
+<h2>4. Constraints</h2>
+<ul>
+<li><strong>Sample efficiency:</strong> all curves share the env-steps x-axis; the
+  no-HER ablation shows what the relabeling buys per step.</li>
+<li><strong>Compute honesty (R6):</strong> every arm ran 1M env steps — identical
+  budgets, so the comparison is on equal terms. Wall-clock (CPU-only
+  throughout; per-run hardware in <code>results/compute_table.md</code>):</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Wall-clock, 1M steps</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TD3+HER (ours)</td>
+<td>42 min laptop (M-series) / ~4.8 h per cluster seed</td>
+</tr>
+<tr>
+<td>TD3 no-HER (ours)</td>
+<td>~3.9–4.8 h per cluster seed</td>
+</tr>
+<tr>
+<td>TD3+HER (SB3)</td>
+<td>~5.5–6.9 h</td>
+</tr>
+<tr>
+<td>SAC+HER (SB3)</td>
+<td>~6.9–8.8 h</td>
+</tr>
+</tbody>
+</table>
+<p>Two honest notes. The laptop core is ~3× faster per-core than the
+  cluster's older Xeons, so cross-hardware times are not comparable — env
+  steps are the shared axis. And our agent is the <em>cheapest</em> arm per env
+  step (one deterministic actor, two critics; SAC also back-props a
+  stochastic policy and tunes a temperature) — a consequence of the
+  algorithm choice, not something we optimized for.
+- <strong>Why CPU:</strong> GPU dispatch measured slower for 256-wide MLPs at batch 256,
+  and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only
+  half the loop. 8 CPU cores per job; we report the choice rather than
+  assume more hardware would have helped.
+- <strong>Control rate:</strong> ~0.1 ms/action on CPU, far inside a 25 Hz budget — no
+  inference-side compute concern at deployment scale.</p>
+<h2>5. Honesty &amp; Trajectory</h2>
+<p><strong>Known failure modes.</strong> On 200 held-out initial states (env seeds
+2000–2199, disjoint from both the training and R4 eval seeds) the seed-0
+policy fails once — 0.5%, seed 2081, in
+<code>results/push_failure_seed2081.mp4</code>; full sweep in
+<code>results/failure_sweep.md</code>, regenerated by <code>scripts/failure_sweep.py</code>.</p>
+<p>The mechanism is <strong>contact without sustained pushing</strong>, not overshoot. The
+gripper reaches the block normally (closest approach 0.043 m — touching)
+then delivers only 17% of the required displacement, 0.298 m → 0.248 m in
+three increments separated by long stationary stretches, against a 0.05 m
+threshold. The block is never pushed past the goal, so this is not an
+overshoot the policy fails to correct; it stops generating lateral force
+while in contact.</p>
+<p>We looked for a cause and found none we can defend. The failing state is in
+the longest push quintile, but 41 of the 42 other states needing &gt;0.25 m
+succeed, including one needing 0.375 m — further than the one that fails.
+Push distance does not explain it, and with one failure in 200 we report
+the mechanism and decline to attribute a cause.</p>
+<!-- TODO: re-run the sweep for seeds 1-2 once their checkpoints are off
+the cluster; scripts/failure_sweep.py already skips them cleanly. -->
+
+<p><strong>Negative results (found the hard way, diagnosed systematically):</strong>
+Our first full FetchPush campaign — from-scratch TD3+HER, an SB3 TD3+HER
+baseline, and a no-HER ablation, 1M env steps each — all flat-lined at
+the eval floor (one eval seed starts in a success state; success = 0.05
+throughout). Pre-declared probes: (1) a scripted controller
+solves the task, so the env is fine; (2) the behavior policy moved the block
+in 2% of episodes; (3) the trained actor had <strong>saturated</strong> — mean
+|action| = 1.0, gripper pinned ~1.6 m from the block, tanh gradients dead.
+Sustained ε-random exploration alone did not fix it (block moved in 0/50
+episodes — a collapsed policy acts as a restoring force against per-step
+random actions).</p>
+<p><img alt="the campaign that failed" src="../results/negative_result.png" /></p>
+<p>That diagnosis shaped the final design (§2): action-L2 and a 10× faster
+target-update rate attack the saturation directly, observation
+normalization removes the scale mismatch feeding it, and wider noise plus
+sustained ε-random mixing keep the buffer off the degenerate policy's own
+trajectories.</p>
+<p>Two limits we state rather than hide. We changed five things at once under
+deadline and did not ablate them individually, so we know the package works
+but cannot apportion credit inside it — that single-factor sweep is the
+first thing more compute would buy. And the failed runs are committed, not
+deleted, with the figure above regenerated from their CSVs, so this section
+is checkable rather than asserted.</p>
+<p><strong>With two more weeks:</strong> (1) the single-factor stabilizer sweep above;
+(2) PickAndPlace to 3 seeds — the code path is identical, only the config
+changes; (3) a vision-from-pixels variant, swapping the 13-D state for a
+CNN encoder over rendered frames behind the same TD3+HER core, toward
+Griffin's VLA-style perception stack; (4) domain randomization (friction,
+block mass) plus actuation delay, to <em>quantify</em> the sim-to-real gap rather
+than assert it.</p>
+<hr />
+<p><em>Pinned deps (<code>uv.lock</code>), seeded configs, judge path in README.
+From-scratch code (<code>src/agent/</code>) is fully separated from baseline code
+(<code>src/baseline/</code>); any of us can walk through the loss function or any
+architecture decision live (R1).</em></p>
+<script>
+window.addEventListener('load', () => {
+  const h = document.body.scrollHeight;
+  const pages = h / 931;
+  console.log('content height ' + h + 'px = ' + pages.toFixed(2) + ' pages');
+  window.__pages = pages;
+});
+</script>
+</body></html>

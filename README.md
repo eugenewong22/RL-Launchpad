@@ -100,3 +100,13 @@ uv run python scripts/make_plots.py            # learning curves + compute table
 uv run python scripts/make_negative_figure.py  # the failed campaign + its config diff
 uv run python scripts/failure_sweep.py         # failure modes on held-out states
 ```
+
+The 4-page write-up is [`docs/writeup.md`](docs/writeup.md). To render the
+print/PDF version (`docs/writeup.html`, self-contained, figures inlined):
+
+```bash
+uv run --with markdown python scripts/build_writeup.py
+```
+
+`--with` rather than a pinned dependency on purpose — a doc-build package
+has no business in the lock file a judge installs from.

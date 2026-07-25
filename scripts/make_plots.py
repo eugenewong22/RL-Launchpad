@@ -103,7 +103,10 @@ def main():
     # filename the write-up references; other tasks get their own file.
     envs = sorted({env_id for env_id, _ in arms})
     for env_id in envs:
-        fig, ax = plt.subplots(figsize=(8, 5))
+        # Wide and short on purpose: the write-up has a hard 4-page limit and
+        # a figure's printed height is width x aspect. Widening rather than
+        # scaling down keeps the tick and legend text at readable size.
+        fig, ax = plt.subplots(figsize=(9, 3.0))
         for (e, arm), runs in sorted(arms.items()):
             if e != env_id:
                 continue
@@ -111,7 +114,10 @@ def main():
         ax.set_xlabel("Environment steps")
         ax.set_ylabel("Eval success rate")
         ax.set_ylim(-0.05, 1.05)
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, fontsize=9)
+        # Inside the axes, not below: a below-axes legend adds its own height
+        # to the figure. The upper-left is empty on every one of these curves
+        # (they all start at the floor and rise), so it costs nothing.
+        ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
         ax.set_title(f"{env_id}: eval success rate (mean ± std across seeds)")
         ax.grid(alpha=0.3)
         fig.tight_layout()
