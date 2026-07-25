@@ -110,6 +110,14 @@ def main():
         for (e, arm), runs in sorted(arms.items()):
             if e != env_id:
                 continue
+            # Stabilizer-ablation arms share this env but answer a different
+            # question, and each is n=1. Five extra near-flat curves would
+            # crowd the agent-vs-baseline comparison this figure exists for;
+            # they get their own report in results/stabilizer_ablation.md.
+            # They stay in compute_table.md below — that compute was spent,
+            # and R6 asks us to say so.
+            if arm.startswith("ablate"):
+                continue
             plot_arm(ax, runs, ARM_LABELS.get(arm, arm), ARM_STYLES.get(arm, "-"))
         ax.set_xlabel("Environment steps")
         ax.set_ylabel("Eval success rate")
