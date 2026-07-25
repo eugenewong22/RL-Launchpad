@@ -52,7 +52,7 @@ Each major decision, with the alternative we ruled out:
 | Decision | Why | Rejected alternative & its shortcoming |
 |---|---|---|
 | Off-policy + HER | Sparse goal-conditioned reward: relabeling failed episodes with achieved goals is the only signal source | PPO (on-policy): cannot reuse relabeled experience; dense shaping: reward engineering we'd have to defend per-task |
-| TD3 over SAC | Fewer moving parts under a deadline; deterministic eval; each trick is an explainable overestimation fix | SAC: entropy temperature is one more tunable, stochastic eval adds variance to R4 numbers |
+| TD3 over SAC | Fewer moving parts under a deadline; deterministic eval; each trick is an explainable overestimation fix | SAC: entropy temperature is one more tunable, stochastic eval adds variance to R4 numbers. **In hindsight this was the costly choice**: a deterministic actor is what saturates under sparse reward (§5), and SAC's entropy bonus makes it structurally immune. We reached the same final performance, but SAC would have got there without the three stabilizers. We report this rather than presenting TD3 as obviously correct. |
 | HER `future`, k=4 | Relabels 80% of sampled transitions from later same-episode states; the paper's recommended strategy | `final` strategy: fewer distinct goals per episode, weaker coverage near trajectory ends |
 | Sample-time relabeling | Fresh counterfactual goals every epoch from the same episodes | Store-time relabeling: freezes k copies, inflates memory k× |
 | MLP 256-256 | Fetch state is 13-D; capacity is not the bottleneck, stability is | Deeper/wider nets: slower, no gain at this input size (deliberate simplicity) |
@@ -82,17 +82,46 @@ R4 protocol. This is the "simple controller" bar the learned policies
 must beat — and it is not trivial: it fails exactly where open-loop
 scripting should (goals requiring re-approach after overshoot).
 
-**FetchPush, 3 seeds × 1M steps:** <!-- TODO: fill seeds 1-2 + SB3/SAC arms after matrix -->
-- From-scratch TD3+HER: seed 0 = **1.000** on the 50-episode R4 protocol
-  (mean return −10.4 ≈ ten-step solves); liftoff ~350k steps, 100% eval
-  success sustained from ~520k to 1M. Seeds 1–2: TODO.
-- Robustness beyond the protocol: 199/200 held-out seeds solved (~0.5%
-  failure rate; the one failure is shown in the demo video, labeled).
-- SB3 TD3+HER baseline: TODO (out-of-the-box it lacks the three
-  stabilizers above — this arm doubles as their ablation)
-- SB3 SAC+HER baseline: TODO
-- TD3 no-HER ablation: TODO (quantifies HER's contribution)
-- Scripted classical baseline: 0.540 (identical protocol; no learning, no variance)
+**FetchPush, 3 seeds × 1M steps** (in-training eval, 20 episodes on the
+fixed eval seeds; 50-episode R4 numbers in `results/final_eval.md`):
+
+| Arm | Final success (per seed) | Verdict |
+|---|---|---|
+| **TD3+HER (from scratch)** | **1.00, 1.00, 1.00** | Solved on every seed |
+| SAC+HER (SB3 baseline) | 1.00, 0.95, 1.00 | Matches us — the strongest baseline |
+| TD3+HER (SB3 baseline) | 0.05, 0.05, 0.05 | Never learned (see below) |
+| TD3 no-HER (our ablation) | 0.05, 0.05, 0.05 | Never learned; contact ≤7% |
+| Scripted classical controller | 0.54 (deterministic) | The simple-baseline bar |
+
+Four results, each load-bearing:
+
+1. **We match the strongest library baseline and beat the classical one.**
+   Our from-scratch agent solves all three seeds (mean return ≈ −10.6,
+   i.e. ~11-step solves); SB3's SAC+HER reaches the same plateau. Matching
+   a mature, tuned implementation with code written from scratch is the
+   claim we set out to prove, and we make it on equal terms: same task,
+   same observation/action space, same eval seeds, same protocol.
+2. **HER is load-bearing, and we measured how.** The no-HER ablation is
+   identical except `her_k=0`, and it never leaves the floor — with
+   object contact in ≤7% of episodes versus ~95% for the HER arms. The
+   mechanism is visible in the logged `contact_frac`, not inferred.
+3. **The stabilizers are load-bearing too — and this is where the
+   from-scratch requirement paid off.** SB3's TD3+HER is flat on all three
+   seeds under the same budget and hyperparameters, because it has no
+   action-L2 penalty, no observation normalization, and no sustained
+   ε-random mixing. Our first implementation failed the same way (§5), and
+   because we owned every line, we could diagnose it (actor saturation)
+   and fix it. This arm is therefore both a baseline and an ablation of
+   the three additions.
+4. **Deterministic-actor methods need those stabilizers here; SAC does
+   not.** SAC's entropy-regularized stochastic policy cannot saturate the
+   way a deterministic actor does, which is why it is the one
+   out-of-the-box baseline that works. That is the non-obvious domain
+   insight this project produced.
+
+**Robustness beyond the protocol:** 199/200 held-out (non-eval) initial
+states solved (~0.5% failure); the single failure is in the demo video,
+labeled.
 
 **Stretch task — FetchPickAndPlace (same config, zero re-tuning):**
 seed 0 = **0.740** on the 50-episode R4 protocol at 1M steps (plateau
@@ -111,12 +140,29 @@ and the honest analysis of why. -->
 
 - **Sample efficiency:** all curves share the env-steps x-axis; the
   no-HER ablation shows what the relabeling buys per step.
-- **Compute honesty (R6):** every run logs env steps and wall-clock;
-  `results/compute_table.md` reports both for ours *and* the baseline.
-  All training is CPU-only (Apple M-series laptop and/or university
-  server CPU — per-run hardware noted in the table); CPU was measured
-  faster than GPU dispatch for 256-wide MLPs at batch 256.
-  <!-- TODO: final table + per-run hardware -->
+- **Compute honesty (R6):** every arm ran 1M env steps — identical
+  budgets, so the comparison is on equal terms. Wall-clock (CPU-only
+  throughout; per-run hardware in `results/compute_table.md`):
+
+  | Arm | Wall-clock, 1M steps |
+  |---|---|
+  | TD3+HER (ours) | 42 min laptop (M-series) / ~4.8 h per cluster seed |
+  | TD3 no-HER (ours) | ~3.9–4.8 h per cluster seed |
+  | TD3+HER (SB3) | ~5.5–6.9 h |
+  | SAC+HER (SB3) | ~6.9–8.8 h |
+
+  Two honest notes. The laptop core is ~3× faster per-core than the
+  cluster's older Xeons, so cross-hardware times are not comparable —
+  env steps are the axis all curves share. And our agent is the
+  *cheapest* arm per env step (one deterministic actor, two critics; SAC
+  additionally samples and back-props through a stochastic policy and
+  tunes an entropy temperature) — worth noting, but it is a consequence
+  of the algorithm choice, not something we optimized for.
+- **Why CPU:** we measured GPU dispatch to be slower for 256-wide MLPs
+  at batch 256; MuJoCo stepping is CPU-bound regardless, so a GPU can
+  accelerate only the update half of the loop. We ran on 8 CPU cores per
+  job instead, and report that choice rather than assuming more
+  resources would have been better.
 - **Control-rate realism:** the policy is a 4-layer-equivalent MLP,
   ~0.1 ms/action on CPU — far inside a 25 Hz control budget; no
   inference-side compute concerns at deployment scale.
