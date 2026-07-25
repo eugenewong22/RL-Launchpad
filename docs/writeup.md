@@ -13,11 +13,10 @@ perturbation invalidates the contact schedule. A policy must perceive the
 current configuration and re-plan the contact through it.
 
 Why the obvious approaches fall short: **scripted control** computes
-waypoints that don't react to the randomized block and goal poses;
-**dense-reward RL** needs hand-shaping that is per-task engineering and a
-known reward-hacking source; **vanilla off-policy RL** almost never sees a
-success on sparse reward and cannot bootstrap value — our no-HER ablation
-quantifies exactly that.
+waypoints that don't react to randomized block and goal poses;
+**dense-reward RL** needs per-task hand-shaping, a known reward-hacking
+source; **vanilla off-policy RL** almost never sees a success and cannot
+bootstrap value — our no-HER ablation quantifies that.
 
 **Success criteria, fixed before building:** (a) match the SB3 baseline's
 mean±std band at 1M env steps over 3 seeds × 50 fixed eval episodes;
@@ -27,7 +26,7 @@ eval from a clean clone in under 15 minutes.
 ## 2. Approach
 
 **Algorithm: TD3 + Hindsight Experience Replay, written from scratch in
-PyTorch** (`src/agent/`, 680 lines). Training loop, replay buffer, HER
+PyTorch** (`src/agent/`, ~680 lines). Training loop, replay buffer, HER
 relabeling, networks, normalizer, and update rule are all ours; the only
 imports are `torch`, `numpy`, `gymnasium`/`gymnasium-robotics`, `yaml`
 and the standard library, so autograd, Adam and the simulator are the
@@ -129,20 +128,20 @@ Four results, each load-bearing:
    are committed under `results/archive_broken_config/`). We diagnosed the
    mechanism in our own code, where we could instrument it: the actor had
    **saturated**, mean |action| = 1.0, tanh gradients dead.
-
-   We therefore claim only that the SB3 defaults do not train TD3+HER on
-   FetchPush in 1M steps, and that two implementations agree on it. We do
-   **not** claim our five changes would fix SB3's TD3+HER — we never ran
-   that experiment. That arm is a *failed baseline configuration*, not an
-   ablation of our additions, and the ~20× gap against it is **not**
-   evidence that our implementation beats TD3+HER as published. Our fair
-   comparison is SAC+HER, which we match. Reporting the gap as a win would
-   be the easiest way to mislead a reader here, so we say plainly it isn't.
 4. **Deterministic-actor methods need those stabilizers here; SAC does
    not** — its entropy-regularized stochastic policy cannot saturate the way
    a deterministic actor does, which is why it is the one out-of-the-box
    baseline that works. That is the non-obvious insight this project
    produced, and it is why §2 records TD3-over-SAC as the costly choice.
+
+On the third point we claim only that the SB3 defaults do not train TD3+HER
+on FetchPush in 1M steps, and that two implementations agree on it. We do
+**not** claim our five changes would fix SB3's TD3+HER — we never ran that
+experiment. That arm is a *failed baseline configuration*, not an ablation
+of our additions, and the ~20× gap against it is **not** evidence that our
+implementation beats TD3+HER as published. Our fair comparison is SAC+HER,
+which we match. Reporting the gap as a win would be the easiest way to
+mislead a reader here, so we say plainly it isn't.
 
 **Beyond the protocol:** 599/600 held-out non-eval initial states solved
 across the three seeds — one failure total, dissected in §5. **Stretch
@@ -200,8 +199,7 @@ first successes before it commits.
   and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only
   half the loop. 8 CPU cores per job; we report the choice rather than
   assume more hardware would have helped.
-- **Control rate:** ~0.1 ms/action on CPU, far inside a 25 Hz budget — no
-  inference-side compute concern at deployment scale.
+- **Control rate:** ~0.1 ms/action on CPU, far inside a 25 Hz budget.
 
 ## 5. Honesty & Trajectory
 
@@ -261,7 +259,6 @@ block mass) plus actuation delay, to *quantify* the sim-to-real gap rather
 than assert it.
 
 ---
-*Pinned deps (`uv.lock`), seeded configs, judge path in README.
-From-scratch code (`src/agent/`) is fully separated from baseline code
-(`src/baseline/`); any of us can walk through the loss function or any
-architecture decision live (R1).*
+*Pinned deps (`uv.lock`), seeded configs, judge path in README; `src/agent/`
+(ours) is fully separated from `src/baseline/` (SB3). Any of us can walk
+through the loss function or any architecture decision live (R1).*

@@ -287,3 +287,23 @@ def test_cited_result_files_are_committed(writeup):
         f"write-up cites paths that are not committed, so a judge's clone "
         f"will not have them: {untracked}"
     )
+
+
+def test_agent_line_count_claim_is_roughly_right(writeup):
+    """The write-up's `src/agent/` size claim must track the code.
+
+    Stated with a tilde and checked with a tolerance on purpose: an exact
+    figure would fail on every one-line edit, which trains people to update
+    the number reflexively rather than read it. 5% still catches the case
+    that matters — the claim quietly drifting as the "from-scratch" surface
+    grows.
+    """
+    actual = sum(
+        len(p.read_text().splitlines()) for p in (ROOT / "src" / "agent").rglob("*.py")
+    )
+    m = re.search(r"`src/agent/`,\s*~?([\d,]+)\s*lines", writeup)
+    assert m, "could not find the src/agent line-count claim in docs/writeup.md"
+    claimed = int(m.group(1).replace(",", ""))
+    assert abs(claimed - actual) <= 0.05 * actual, (
+        f"writeup claims ~{claimed} lines in src/agent/, actual is {actual}"
+    )

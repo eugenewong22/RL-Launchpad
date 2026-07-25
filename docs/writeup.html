@@ -53,18 +53,17 @@ pre-programmed push assumes fixed block and goal poses, and any
 perturbation invalidates the contact schedule. A policy must perceive the
 current configuration and re-plan the contact through it.</p>
 <p>Why the obvious approaches fall short: <strong>scripted control</strong> computes
-waypoints that don't react to the randomized block and goal poses;
-<strong>dense-reward RL</strong> needs hand-shaping that is per-task engineering and a
-known reward-hacking source; <strong>vanilla off-policy RL</strong> almost never sees a
-success on sparse reward and cannot bootstrap value — our no-HER ablation
-quantifies exactly that.</p>
+waypoints that don't react to randomized block and goal poses;
+<strong>dense-reward RL</strong> needs per-task hand-shaping, a known reward-hacking
+source; <strong>vanilla off-policy RL</strong> almost never sees a success and cannot
+bootstrap value — our no-HER ablation quantifies that.</p>
 <p><strong>Success criteria, fixed before building:</strong> (a) match the SB3 baseline's
 mean±std band at 1M env steps over 3 seeds × 50 fixed eval episodes;
 (b) the no-HER ablation clearly underperforms; (c) a judge reproduces our
 eval from a clean clone in under 15 minutes.</p>
 <h2>2. Approach</h2>
 <p><strong>Algorithm: TD3 + Hindsight Experience Replay, written from scratch in
-PyTorch</strong> (<code>src/agent/</code>, 680 lines). Training loop, replay buffer, HER
+PyTorch</strong> (<code>src/agent/</code>, ~680 lines). Training loop, replay buffer, HER
 relabeling, networks, normalizer, and update rule are all ours; the only
 imports are <code>torch</code>, <code>numpy</code>, <code>gymnasium</code>/<code>gymnasium-robotics</code>, <code>yaml</code>
 and the standard library, so autograd, Adam and the simulator are the
@@ -243,20 +242,20 @@ that, not zero.</p>
    are committed under <code>results/archive_broken_config/</code>). We diagnosed the
    mechanism in our own code, where we could instrument it: the actor had
    <strong>saturated</strong>, mean |action| = 1.0, tanh gradients dead.</li>
-</ol>
-<p>We therefore claim only that the SB3 defaults do not train TD3+HER on
-   FetchPush in 1M steps, and that two implementations agree on it. We do
-   <strong>not</strong> claim our five changes would fix SB3's TD3+HER — we never ran
-   that experiment. That arm is a <em>failed baseline configuration</em>, not an
-   ablation of our additions, and the ~20× gap against it is <strong>not</strong>
-   evidence that our implementation beats TD3+HER as published. Our fair
-   comparison is SAC+HER, which we match. Reporting the gap as a win would
-   be the easiest way to mislead a reader here, so we say plainly it isn't.
-4. <strong>Deterministic-actor methods need those stabilizers here; SAC does
+<li><strong>Deterministic-actor methods need those stabilizers here; SAC does
    not</strong> — its entropy-regularized stochastic policy cannot saturate the way
    a deterministic actor does, which is why it is the one out-of-the-box
    baseline that works. That is the non-obvious insight this project
-   produced, and it is why §2 records TD3-over-SAC as the costly choice.</p>
+   produced, and it is why §2 records TD3-over-SAC as the costly choice.</li>
+</ol>
+<p>On the third point we claim only that the SB3 defaults do not train TD3+HER
+on FetchPush in 1M steps, and that two implementations agree on it. We do
+<strong>not</strong> claim our five changes would fix SB3's TD3+HER — we never ran that
+experiment. That arm is a <em>failed baseline configuration</em>, not an ablation
+of our additions, and the ~20× gap against it is <strong>not</strong> evidence that our
+implementation beats TD3+HER as published. Our fair comparison is SAC+HER,
+which we match. Reporting the gap as a win would be the easiest way to
+mislead a reader here, so we say plainly it isn't.</p>
 <p><strong>Beyond the protocol:</strong> 599/600 held-out non-eval initial states solved
 across the three seeds — one failure total, dissected in §5. <strong>Stretch
 task — FetchPickAndPlace</strong>, same config, zero re-tuning: seed 0 = <strong>0.740</strong>
@@ -350,8 +349,7 @@ first successes before it commits.</p>
   and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only
   half the loop. 8 CPU cores per job; we report the choice rather than
   assume more hardware would have helped.
-- <strong>Control rate:</strong> ~0.1 ms/action on CPU, far inside a 25 Hz budget — no
-  inference-side compute concern at deployment scale.</p>
+- <strong>Control rate:</strong> ~0.1 ms/action on CPU, far inside a 25 Hz budget.</p>
 <h2>5. Honesty &amp; Trajectory</h2>
 <p><strong>Known failure modes.</strong> Across <strong>600</strong> held-out initial states — env
 seeds 2000–2199 run against all three policies, disjoint from the training
@@ -401,10 +399,9 @@ Griffin's VLA-style perception stack; (4) domain randomization (friction,
 block mass) plus actuation delay, to <em>quantify</em> the sim-to-real gap rather
 than assert it.</p>
 <hr />
-<p><em>Pinned deps (<code>uv.lock</code>), seeded configs, judge path in README.
-From-scratch code (<code>src/agent/</code>) is fully separated from baseline code
-(<code>src/baseline/</code>); any of us can walk through the loss function or any
-architecture decision live (R1).</em></p>
+<p><em>Pinned deps (<code>uv.lock</code>), seeded configs, judge path in README; <code>src/agent/</code>
+(ours) is fully separated from <code>src/baseline/</code> (SB3). Any of us can walk
+through the loss function or any architecture decision live (R1).</em></p>
 <script>
 window.addEventListener('load', () => {
   const h = document.body.scrollHeight;
