@@ -35,21 +35,24 @@ clean clone into an empty directory):
 
 | Stage | Cold cache | Warm cache |
 |---|---|---|
-| `git clone` | 20 s | 20 s |
+| `git clone` (80 MB) | 14–36 s | 14–36 s |
 | `uv sync` | 10 s (792 MB of wheels downloaded) | 1 s |
-| `check_env.py` | 9 s | 9 s |
-| `pytest` (33 tests) | 13 s | 13 s |
-| 50-episode eval | 3 s | 3 s |
-| **total** | **~55 s** | **46 s** |
+| `check_env.py` | 7 s | 7 s |
+| `pytest` (33 tests) | 15 s | 15 s |
+| 50-episode eval | 2 s | 2 s |
+| **total** | **~50–70 s** | **~40–60 s** |
 
-The `uv sync` row is network-bound — 792 MB is dominated by the pinned
-PyTorch wheel, so a slow link moves that row and nothing else. Even at
-1 MB/s the total stays inside the 15-minute budget. The `check_env.py` row
-is first-run MuJoCo initialisation in a fresh venv, not a repo cost.
+Both network-bound rows are reported as ranges because that is what we
+measured: two clones of the same commit took 36 s and 14 s. The 792 MB is
+dominated by the pinned PyTorch wheel, so a slow link moves `uv sync` and
+nothing else — even at 1 MB/s the total stays well inside the 15-minute
+budget. `check_env.py` is first-run MuJoCo initialisation in a fresh venv,
+not a repo cost.
 
-*Method note:* every row except `git clone` was re-measured inside a fresh
-clone. The clone row is carried over from an earlier drill against a
-smaller repo, so treat it as a lower bound until re-measured.
+The repo is 80 MB because it carries a checkpoint for **every** reported
+run — all three from-scratch seeds, all three no-HER seeds, and all six SB3
+baseline arms. That is a deliberate trade: a judge can re-run any number in
+this README rather than only the headline one.
 
 To watch the policy, render episodes from the same checkpoint and seeds:
 
@@ -59,13 +62,38 @@ uv run python scripts/record_video.py \
     --env-id FetchPush-v4 --episodes 5 --out results/demo.mp4
 ```
 
+## Results
+
+FetchPush-v4, 50 episodes × 3 seeds on eval seeds 10000–10049, disjoint
+from training (`results/final_eval_push.md`):
+
+| Arm | Success (mean ± std) | Per-seed |
+|---|---|---|
+| **TD3+HER — from scratch** | **0.993 ± 0.009** | 1.00, 1.00, 0.98 |
+| SAC+HER — SB3 baseline | 0.993 ± 0.009 | 1.00, 0.98, 1.00 |
+| TD3+HER — SB3 baseline | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
+| TD3 no-HER — our ablation | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
+| Scripted classical controller | 0.54 | deterministic |
+
+We **match** SB3's SAC+HER — the tie is exact on both mean and std, and the
+per-seed vectors differ only in which seed drops one episode. We do not
+claim to beat it.
+
+The SB3 **TD3**+HER arm did not learn in 1M steps at its published
+settings. Our own TD3+HER was equally flat at those settings until we
+changed five things (`results/config_diff.md`), so we report that arm as a
+**failed baseline configuration**, not as a 20× win — see `docs/writeup.md`
+§3. FetchPickAndPlace, same config with zero re-tuning: **0.740** (seed 0).
+Robustness: **599/600** held-out non-eval initial states across the three
+seeds (`results/failure_sweep.md`).
+
 ## Rules mapping
 
 | Rule | Where |
 |---|---|
 | R1 from-scratch algorithm/networks | `src/agent/` only; `src/baseline/` is SB3 and clearly separated |
 | R2 published baseline, same protocol | `src/baseline/train_sb3.py`, evaluated through the same `src/agent/evaluate.evaluate`. **Two SB3 baselines**: SAC+HER (matches us — the operative comparison) and TD3+HER (did not learn in 1M steps at SB3's published settings). We report the TD3 arm as a failed baseline configuration, not as a win; see `docs/writeup.md` §3 |
-| R3 reproducibility | `uv.lock` pins exact versions; configs + seeds committed; this quickstart |
+| R3 reproducibility | `uv.lock` pins exact versions; configs, seeds **and every reported checkpoint** committed; this quickstart. The full FetchPush table below was re-derived on a laptop from the committed checkpoints and matched the cluster's output exactly, arm for arm |
 | R4 standardized eval | 50 episodes, eval seeds `10000+i`, disjoint from training seeds. Demo clips render from the reported checkpoints on those seeds — except the labelled failure clip, drawn from a disjoint held-out block (2000+) because the reported 50 contain no seed-0 failure; stated on the clip and in `docs/writeup.md` §5 |
 | R5 simulation only, stock tasks | Unmodified `FetchReach-v4` / `FetchPush-v4` / `FetchPickAndPlace-v4` — no reward, observation, action-space, or terrain changes |
 | R6 compute honesty | every run logs env steps + wall-clock to `progress.csv`; `results/compute_table.md` aggregates |
