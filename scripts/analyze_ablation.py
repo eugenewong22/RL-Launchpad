@@ -33,23 +33,57 @@ STABILIZERS = ["action_l2", "normalize_obs", "tau", "expl_noise", "random_eps"]
 RUN_SUFFIX = "_seed0"
 
 # Final success within this margin of the reported run counts as "no effect".
-# 0.10 is deliberately generous: with n=1 seed per arm we can identify a
-# collapse, not a small regression, and the table says so.
 TOLERANCE = 0.10
 
+# Final success saturates: every single-factor arm reaches ~1.0 by 1M steps,
+# so judging on it alone reports "nothing matters" and misses a 2x sample-
+# efficiency cost. Steps-to-durable-0.9 is the metric with signal.
+#
+# The yardstick is the reported arm's OWN seed-to-seed spread rather than an
+# arbitrary threshold: with n=1 per ablation arm, anything inside the band
+# three seeds of the SAME config already produce is not evidence of an effect.
+REPORTED_SEEDS = ["push_td3_her_seed0", "push_td3_her_seed1", "push_td3_her_seed2"]
+DURABLE = (0.9, 0.8)  # reached >=0.9 and never fell below 0.8 after
 
-def read_final(run_dir: Path) -> dict | None:
+
+def steps_to_durable(rows: list[dict]) -> int | None:
+    """First env_steps at which success hits 0.9 and never drops below 0.8."""
+    hi, lo = DURABLE
+    steps = [int(r["env_steps"]) for r in rows]
+    succ = [float(r["success_rate"]) for r in rows]
+    for i, v in enumerate(succ):
+        if v >= hi and min(succ[i:]) >= lo:
+            return steps[i]
+    return None
+
+
+def read_final(run_dir: Path, require_complete: bool = True) -> dict | None:
+    """None if the run has not finished.
+
+    A partial progress.csv looks exactly like a finished one to a reader that
+    only takes the last row -- and an arm 30k steps into a 1M-step budget
+    reads as a total collapse. Judging that would put a false verdict in a
+    committed report, so an arm counts only once it reaches its configured
+    budget.
+    """
     csv_path = run_dir / "progress.csv"
     if not csv_path.exists():
         return None
     rows = list(csv.DictReader(csv_path.open()))
     if not rows:
         return None
+    if require_complete:
+        cfg_path = run_dir / "config.yaml"
+        if cfg_path.exists():
+            budget = yaml.safe_load(cfg_path.read_text()).get("total_env_steps")
+            if budget and int(rows[-1]["env_steps"]) < budget:
+                return None
     last = rows[-1]
     # Average the last 5 evals: single evals are 20-episode samples and
     # bounce by a couple of points even on a solved policy.
     tail = rows[-5:]
     return {
+        "reach90": steps_to_durable(rows),
         "success": sum(float(r["success_rate"]) for r in tail) / len(tail),
         "final": float(last["success_rate"]),
         "contact": (
@@ -95,6 +129,22 @@ def main():
             "load_bearing": drop > TOLERANCE,
         })
 
+    # The reported config's own seed spread is the noise floor: with n=1 per
+    # ablation arm, a difference inside the band three seeds of the SAME
+    # config already produce is not evidence of anything.
+    seed_reach = [
+        r["reach90"] for r in (read_final(res / s) for s in REPORTED_SEEDS)
+        if r and r["reach90"]
+    ]
+    band = (min(seed_reach), max(seed_reach)) if seed_reach else None
+
+    def verdict(r):
+        if r["drop"] > TOLERANCE:
+            return "**collapses**"
+        if band and r["reach90"] and r["reach90"] > band[1]:
+            return f"**slower** ({r['reach90'] / reported['reach90']:.1f}x)"
+        return "within seed noise"
+
     lines = [
         "# Single-factor ablation of the stabilizer package",
         "",
@@ -103,43 +153,68 @@ def main():
         "five at once, so `docs/writeup.md` §5 could report only that the "
         "package works. Each run below reverts exactly ONE setting to its "
         "`TrainConfig` default — the value the failed campaign used — holding "
-        "everything else at the reported config. Seed 0, 1M env steps, "
-        "identical eval protocol.",
+        "everything else at the reported config. Seed 0, 1M env steps.",
         "",
-        "Success is the mean of the last 5 in-training evals (20 episodes each); "
-        "`contact` is `contact_frac`, the fraction of episodes that moved the "
-        "block, which is how a saturated actor is distinguished from one that "
-        "merely learned worse.",
+        "**Read the third column, not the second.** Final success saturates: "
+        "every single-factor arm reaches ~1.0 by 1M steps, so final success "
+        "alone says nothing matters. Steps to a *durable* 0.9 (reached and "
+        "never dropping below 0.8 again) is where the differences live.",
         "",
-        "| Reverted setting | Change | Success | Δ vs reported | Contact | Load-bearing? |",
-        "|---|---|---|---|---|---|",
-        f"| *none (reported run)* | — | **{reported['success']:.3f}** | — | "
-        f"{fmt(reported['contact'], '{:.2f}')} | — |",
     ]
-    for r in sorted(rows, key=lambda r: -r["drop"]):
-        verdict = "**yes**" if r["load_bearing"] else "no"
+    if band:
+        lines += [
+            f"The reported config's own three seeds reach durable 0.9 at "
+            f"{band[0]:,}–{band[1]:,} steps. That band is the noise floor: with "
+            "one seed per ablation arm, a result inside it is not evidence of "
+            "an effect.",
+            "",
+        ]
+    lines += [
+        "| Reverted setting | Change | Success | Steps to 0.9 | Contact | Effect |",
+        "|---|---|---|---|---|---|",
+        f"| *none (reported run)* | — | **{reported['success']:.3f}** | "
+        f"**{reported['reach90']:,}** | {fmt(reported['contact'], '{:.2f}')} | — |",
+    ]
+    for r in sorted(rows, key=lambda r: -(r["reach90"] or 0)):
         lines.append(
             f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['success']:.3f} | "
-            f"−{r['drop']:.3f} | {fmt(r['contact'], '{:.2f}')} | {verdict} |"
+            f"{r['reach90']:,} | {fmt(r['contact'], '{:.2f}')} | {verdict(r)} |"
+            if r["reach90"] else
+            f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['success']:.3f} | "
+            f"never | {fmt(r['contact'], '{:.2f}')} | **collapses** |"
         )
     if broken:
         lines.append(
-            f"| *all five (archived)* | — | {broken['success']:.3f} | "
-            f"−{reported['success'] - broken['success']:.3f} | "
-            f"{fmt(broken['contact'], '{:.2f}')} | — |"
+            f"| *all five (archived)* | — | {broken['success']:.3f} | never | "
+            f"{fmt(broken['contact'], '{:.2f}')} | **collapses** |"
         )
 
     lines += [
         "",
-        f"Load-bearing = reverting it costs more than {TOLERANCE:.2f} success. "
-        "With one seed per arm this identifies collapses, not small "
-        "regressions; a settled question would need 3 seeds per arm.",
+        "`contact` is `contact_frac`, the fraction of episodes that moved the "
+        "block. It stays high in every single-factor arm — so actor saturation, "
+        "the mechanism the original campaign died of, does not recur when only "
+        "one setting is reverted.",
+        "",
+        "**What this does and does not license.** No single reversion "
+        "reproduces the collapse, so no one setting is *necessary*. That is not "
+        "the same as the changes not mattering: the all-five-reverted control "
+        "flat-lined at the floor on three independent arms, so the failure was "
+        "real and reproducible. Two explanations remain indistinguishable at "
+        "n=1 per arm — genuine redundancy (several mechanisms each suffice), or "
+        "a collapse fragile enough that almost any perturbation escapes it. "
+        "Separating them needs 3 seeds per arm.",
         "",
     ]
     if missing:
+        # Must be in the FILE, not just stdout: a report that silently omits
+        # an arm reads as a complete result to anyone who did not watch it
+        # being generated.
         lines += [
-            f"**Incomplete:** no progress.csv yet for {', '.join(missing)}. "
-            "Run `bash scripts/run_ablation.sh` and regenerate.",
+            f"> **Incomplete — {len(missing)} of 5 arms not yet run:** "
+            f"{', '.join(f'`{m}`' for m in missing)}. "
+            "Run `bash scripts/run_ablation.sh --resume` and regenerate. "
+            "Conclusions above are provisional until every arm is present.",
             "",
         ]
 
