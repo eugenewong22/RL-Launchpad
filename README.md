@@ -37,14 +37,19 @@ clean clone into an empty directory):
 |---|---|---|
 | `git clone` | 20 s | 20 s |
 | `uv sync` | 10 s (792 MB of wheels downloaded) | 1 s |
-| `check_env.py` | 4 s | 4 s |
-| `pytest` (26 tests) | 14 s | 14 s |
-| 50-episode eval | 2 s | 2 s |
-| **total** | **~50 s** | **41 s** |
+| `check_env.py` | 9 s | 9 s |
+| `pytest` (33 tests) | 13 s | 13 s |
+| 50-episode eval | 3 s | 3 s |
+| **total** | **~55 s** | **46 s** |
 
 The `uv sync` row is network-bound — 792 MB is dominated by the pinned
 PyTorch wheel, so a slow link moves that row and nothing else. Even at
-1 MB/s the total stays inside the 15-minute budget.
+1 MB/s the total stays inside the 15-minute budget. The `check_env.py` row
+is first-run MuJoCo initialisation in a fresh venv, not a repo cost.
+
+*Method note:* every row except `git clone` was re-measured inside a fresh
+clone. The clone row is carried over from an earlier drill against a
+smaller repo, so treat it as a lower bound until re-measured.
 
 To watch the policy, render episodes from the same checkpoint and seeds:
 
