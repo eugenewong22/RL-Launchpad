@@ -44,7 +44,10 @@ and the simulator are library code (per R1).
                     │ Critic₁: 13+4 → 256 → 256 →1│ ┐
                     │ Critic₂: 13+4 → 256 → 256 →1│ ┴→ min(Q₁,Q₂) targets
                     └─────────────────────────────┘
-   (+ Polyak-averaged target copies of all three, τ=0.005)
+   (+ Polyak-averaged target copies of all three, τ=0.05 — see §5;
+    the SB3-default 0.005 is one of the settings our first campaign
+    failed under, and running observation normalization sits in front
+    of the actor/critic inputs)
 ```
 
 Each major decision, with the alternative we ruled out:
@@ -59,12 +62,33 @@ Each major decision, with the alternative we ruled out:
 | 1 gradient step per env step | Matches SB3's tuned throughput → fair same-x-axis comparison | Higher update ratios: better sample efficiency but confounds the R2 comparison |
 
 What we deliberately did **not** build: distributional critics, prioritized
-replay, parallel envs, observation normalization. Each was considered and
-cut because the baseline comparison, not peak performance, is the claim.
+replay, parallel envs. Each was considered and cut because the baseline
+comparison, not peak performance, is the claim.
 
-Hyperparameters follow SB3's published tuned Fetch values (γ=0.95,
-τ=0.005, lr=1e-3, batch 256, buffer 1e6) — deviations would need defending
-and none were needed. <!-- TODO: update if any change before submission -->
+**Hyperparameters, and where we deviate.** We started from SB3's published
+tuned Fetch values (γ=0.95, τ=0.005, lr=1e-3, batch 256, buffer 1e6) and
+that configuration **did not learn** (§5). The reported runs therefore
+deviate in five places. The full diff between the campaign that failed and
+the one that worked is generated from the two committed configs by
+`scripts/make_negative_figure.py` into `results/config_diff.md`:
+
+| Key | Failed campaign | Reported runs | Why |
+|---|---|---|---|
+| `tau` | 0.005 | **0.05** | 10× faster target tracking; slow targets let the saturated actor's value estimates stay self-consistent for too long |
+| `action_l2` | — | **1.0** | penalizes ‖a‖²; the direct counter-pressure to the tanh saturation we diagnosed |
+| `normalize_obs` | — | **true** | running mean/std on observations; Fetch positions and velocities differ by ~2 orders of magnitude |
+| `expl_noise` | 0.1 | **0.2** | wider Gaussian exploration |
+| `random_eps` | — | **0.3** | 30% fully-random actions, sustained (not annealed) |
+
+γ, lr, batch size, buffer capacity, network width, policy delay, target
+noise and clipping are unchanged from the SB3 values. Every reported
+from-scratch run — all three FetchPush seeds, the no-HER ablation, and
+PickAndPlace — uses this identical config; nothing was tuned per task or
+per seed.
+
+One consequence we state plainly: these five are *our* additions, so the
+SB3 TD3+HER baseline does not have them. §3 discusses what that does and
+does not license us to conclude.
 
 ## 3. Evidence
 
@@ -105,14 +129,28 @@ Four results, each load-bearing:
    identical except `her_k=0`, and it never leaves the floor — with
    object contact in ≤7% of episodes versus ~95% for the HER arms. The
    mechanism is visible in the logged `contact_frac`, not inferred.
-3. **The stabilizers are load-bearing too — and this is where the
-   from-scratch requirement paid off.** SB3's TD3+HER is flat on all three
-   seeds under the same budget and hyperparameters, because it has no
-   action-L2 penalty, no observation normalization, and no sustained
-   ε-random mixing. Our first implementation failed the same way (§5), and
-   because we owned every line, we could diagnose it (actor saturation)
-   and fix it. This arm is therefore both a baseline and an ablation of
-   the three additions.
+3. **Two independent TD3+HER implementations fail at the same
+   hyperparameters — which points at the config, not at either codebase.**
+   SB3's TD3+HER is flat on all three seeds. So was *our* TD3+HER, on the
+   same task and budget, until we changed the five settings in §2 (the
+   flat curves are in `results/negative_result.png`, and the archived runs
+   that produced them are committed under
+   `results/archive_broken_config/`). We diagnosed the mechanism in our
+   own code, where we could instrument it: the actor had **saturated**,
+   mean |action| = 1.0, tanh gradients dead (§5).
+
+   What we can claim: the SB3 defaults do not train TD3+HER on FetchPush
+   in 1M steps, and two separate implementations agree on that.
+
+   What we **cannot** claim, and do not: that our five changes would fix
+   SB3's TD3+HER. We never ran that experiment — the changes live in our
+   training loop, and porting them into SB3 was out of scope. So this arm
+   is a *failed baseline configuration*, not an ablation of our additions,
+   and the ~20× gap between our final numbers and SB3's TD3+HER is **not**
+   evidence that our implementation is better than TD3+HER as published.
+   Our fair comparison is SB3's SAC+HER, which we match. Reporting the
+   gap as a win would be the single easiest way to mislead a reader of
+   this write-up, so we are explicit that it is not one.
 4. **Deterministic-actor methods need those stabilizers here; SAC does
    not.** SAC's entropy-regularized stochastic policy cannot saturate the
    way a deterministic actor does, which is why it is the one
@@ -133,8 +171,35 @@ per-task tuning, is doing the work.
 
 ![learning curves](../results/learning_curves.png)
 
-<!-- TODO: 1-2 sentences interpreting the curves: match/beat/lose vs SB3,
-and the honest analysis of why. -->
+**Reading the curves.** Both working arms follow the same shape — flat at
+the 0.05 floor while the buffer fills with relabeled failures, then a sharp
+rise once HER has enough near-goal experience to bootstrap from. On the
+mean curve we reach 0.5 success at 390k env steps against SAC+HER's 440k,
+and 0.9 at 550k against 670k.
+
+We do **not** claim that as a sample-efficiency win, because the per-seed
+numbers do not support it. Steps to a durable 0.9 (reached and never
+dropping below 0.8 again):
+
+| Arm | seed 0 | seed 1 | seed 2 | spread |
+|---|---|---|---|---|
+| TD3+HER (ours) | 450k | 410k | 600k | 190k |
+| SAC+HER (SB3) | 380k | 760k | 650k | 380k |
+
+SAC's *fastest* seed (380k) beats our fastest (410k). Our better mean comes
+mostly from SAC having one slow seed, and with n=3 the 120k-step gap in
+means is smaller than either arm's own seed-to-seed spread — the shaded
+±1σ bands overlap across the entire rise. The defensible statement is that
+we **match** SB3's SAC+HER on both final success and sample efficiency;
+three seeds cannot resolve a difference this size, and we would need
+considerably more to claim one.
+
+One qualitative difference is real and visible: SAC leaves the floor
+earlier (~150k vs ~250k) but climbs more gradually, while our curve departs
+later and rises more steeply, the two crossing around 400k. That is the
+expected signature of an entropy-driven stochastic policy exploring broadly
+from the start versus a deterministic actor with ε-random mixing that needs
+its first successes before it commits.
 
 ## 4. Constraints
 
@@ -203,10 +268,26 @@ block in 2% of episodes; (3) the trained actor had **saturated** — mean
 |action| = 1.0, gripper pinned ~1.6 m from the block, tanh gradients
 dead. Adding sustained ε-random exploration alone did NOT fix it (block
 still moved in 0/50 episodes — a collapsed policy acts as a restoring
-force against per-step random actions). The failure and its mechanism
-shaped the final design: action-L2 penalty, observation normalization,
-and reference target-update rate. <!-- TODO: finalize once the fixed
-config's runs land; include the flat curves as a figure. -->
+force against per-step random actions).
+
+![the campaign that failed](../results/negative_result.png)
+
+The failure and its mechanism shaped the final design. Five settings
+changed (full diff in `results/config_diff.md`, generated from the two
+committed configs so this account cannot drift from them): an action-L2
+penalty and a 10× faster target-update rate attack the saturation
+directly, observation normalization removes the scale mismatch that fed
+it, and wider exploration noise plus sustained ε-random mixing keep the
+buffer from collapsing onto the degenerate policy's own trajectories.
+
+Two limits on this we state rather than hide. We changed five things at
+once under deadline and did not ablate them individually, so we know the
+package works and cannot apportion credit within it — the single-factor
+sweep is the first thing we would run with more compute. And the archived
+failed runs are committed under `results/archive_broken_config/` rather
+than deleted, with the figure above regenerated from their CSVs by
+`scripts/make_negative_figure.py`, so this section is checkable rather
+than asserted.
 
 **What we'd do with two more weeks:**
 1. FetchPickAndPlace (grasping adds a contact mode Push lacks) with the

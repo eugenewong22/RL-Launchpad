@@ -2,10 +2,19 @@
 from-scratch agent is measured against — none of this code is part of
 the submission's algorithm.
 
-Hyperparameters mirror the from-scratch config (which itself follows
-SB3's tuned Fetch values), and evaluation goes through the SAME
-`src.agent.evaluate.evaluate` protocol, so curves are comparable
-point-for-point: same eval seeds, same success metric, same x-axis.
+These are SB3's published tuned Fetch values (gamma 0.95, tau 0.005,
+lr 1e-3, batch 256, buffer 1e6). They do NOT mirror the from-scratch
+config: our agent started from these same values, failed to learn, and
+now deviates in five places (docs/writeup.md section 2 and
+results/config_diff.md). Three of those five -- action-L2 penalty,
+observation normalization, sustained epsilon-random mixing -- have no
+SB3 equivalent to set, so the arms cannot be equalized on them. We
+report the baseline at its own published settings, and say so, rather
+than hand-tuning it toward or away from our numbers.
+
+Evaluation goes through the SAME `src.agent.evaluate.evaluate` protocol,
+so curves are comparable point-for-point: same eval seeds, same success
+metric, same x-axis.
 """
 
 import argparse
@@ -23,9 +32,9 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.her import HerReplayBuffer
 
-ALGOS = {"td3": TD3, "sac": SAC}
-
 from src.agent.evaluate import evaluate
+
+ALGOS = {"td3": TD3, "sac": SAC}
 
 
 @dataclass
@@ -63,7 +72,9 @@ class CsvEvalCallback(BaseCallback):
         self.next_eval = cfg.eval_every
 
     def _eval_and_log(self) -> None:
-        policy_fn = lambda obs: self.model.predict(obs, deterministic=True)[0]
+        def policy_fn(obs):
+            return self.model.predict(obs, deterministic=True)[0]
+
         result = evaluate(policy_fn, self.cfg.env_id, self.cfg.n_eval_episodes, self.cfg.eval_seed_base)
         wall = time.monotonic() - self.start
         critic_loss = self.model.logger.name_to_value.get("train/critic_loss", float("nan"))

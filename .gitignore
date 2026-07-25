@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 results/**/*.mp4
+# SLURM job stdout from the cluster runs; the reported evidence is the
+# committed progress.csv / config.yaml under results/, not these.
+logs/

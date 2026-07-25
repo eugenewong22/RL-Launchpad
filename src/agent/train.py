@@ -103,7 +103,9 @@ def run_training(cfg: TrainConfig) -> dict:
     )
     normalizer = RunningNormalizer(dim=obs_dim + goal_dim) if cfg.normalize_obs else None
     norm = (lambda x: normalizer.normalize(x)) if normalizer else (lambda x: x)
-    reward_fn = lambda ag, g: env.unwrapped.compute_reward(ag, g, {})
+    def reward_fn(ag, g):
+        return env.unwrapped.compute_reward(ag, g, {})
+
     buffer = HerReplayBuffer(
         capacity=cfg.buffer_capacity,
         obs_dim=obs_dim,
@@ -169,7 +171,9 @@ def run_training(cfg: TrainConfig) -> dict:
 
         # ---- periodic eval ----
         if env_steps >= next_eval or env_steps >= cfg.total_env_steps:
-            policy_fn = lambda o: agent.select_action(norm(concat_obs(o)), noise_std=0.0)
+            def policy_fn(o):
+                return agent.select_action(norm(concat_obs(o)), noise_std=0.0)
+
             result = evaluate(policy_fn, cfg.env_id, cfg.n_eval_episodes, cfg.eval_seed_base)
             last_result = result
             wall = time.monotonic() - start

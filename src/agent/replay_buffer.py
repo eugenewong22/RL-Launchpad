@@ -79,7 +79,9 @@ class HerReplayBuffer:
         states = np.concatenate([self.observations[ep, t], goals], axis=1)
         next_states = np.concatenate([self.observations[ep, t + 1], goals], axis=1)
 
-        to = lambda x: torch.as_tensor(x, device=self.device)
+        def to(x):
+            return torch.as_tensor(x, device=self.device)
+
         return (
             to(states),
             to(self.actions[ep, t]),
