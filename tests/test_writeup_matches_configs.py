@@ -162,6 +162,93 @@ def test_agent_code_imports_no_rl_library():
     assert not offenders, f"RL-library import inside src/agent/ (R1 violation): {offenders}"
 
 
+RESULTS_TABLE = RESULTS / "final_eval_push.md"
+
+# Display label in prose -> arm key in the generated table. Spelled out
+# rather than fuzzy-matched, because a *swapped* mapping is precisely the
+# error worth catching: two arms tie at 0.993 ± 0.009, so comparing the
+# numbers as an unordered set would not notice them being attributed to the
+# wrong arms. Both dash styles appear (README uses em-dashes, the write-up
+# parentheses).
+LABEL_TO_ARM = {
+    "TD3+HER (from scratch)": "push_td3_her",
+    "TD3+HER — from scratch": "push_td3_her",
+    "SAC+HER (SB3 baseline)": "push_sb3_sac",
+    "SAC+HER — SB3 baseline": "push_sb3_sac",
+    "TD3+HER (SB3 baseline)": "push_sb3_her",
+    "TD3+HER — SB3 baseline": "push_sb3_her",
+    "TD3 no-HER (our ablation)": "push_td3_noher",
+    "TD3 no-HER — our ablation": "push_td3_noher",
+}
+
+def doc_result_rows(text: str):
+    """Yield (label, 'mean ± std', [per-seed]) from markdown table rows.
+
+    Split on pipes per line rather than matched with one big regex: markdown
+    bold around a cell's contents defeats a value-anchored pattern, and a
+    lazy `.+?` label happily runs past a row boundary. Cells are what the
+    format actually has, so cells are what we parse.
+    """
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.replace("*", "").strip() for c in line.strip("|").split("|")]
+        if len(cells) != 3:
+            continue
+        label, value, per_seed = cells
+        if re.fullmatch(r"\d\.\d+ ± \d\.\d+", value):
+            yield label, value, re.findall(r"\d\.\d+", per_seed)
+
+
+def generated_results() -> dict[str, tuple[str, list[str]]]:
+    """arm -> ('mean ± std', [per-seed]) straight from final_eval_push.md."""
+    if not RESULTS_TABLE.exists():
+        pytest.skip(f"{RESULTS_TABLE} not present")
+    out = {}
+    for line in RESULTS_TABLE.read_text().splitlines():
+        m = re.match(
+            r"\|\s*(\w+)\s*\|\s*\d+\s*\|\s*([\d.]+ ± [\d.]+)\s*\|\s*(.+?)\s*\|$", line
+        )
+        if m:
+            out[m.group(1)] = (m.group(2), re.findall(r"s\d+=([\d.]+)", m.group(3)))
+    return out
+
+
+@pytest.mark.parametrize("doc", ["README.md", "docs/writeup.md"])
+def test_prose_results_tables_match_generated(doc):
+    """The hand-written results tables must match the generated one.
+
+    README.md and docs/writeup.md each restate results/final_eval_push.md in
+    a friendlier form. That restating is transcription, and transcription is
+    what drifted before — so it is checked rather than trusted.
+    """
+    gen = generated_results()
+    text = (ROOT / doc).read_text()
+
+    checked = set()
+    for label, value, got_seeds in doc_result_rows(text):
+        if label not in LABEL_TO_ARM:
+            continue
+        arm = LABEL_TO_ARM[label]
+        assert arm in gen, f"{doc} names an arm absent from {RESULTS_TABLE}: {arm}"
+        want_value, want_seeds = gen[arm]
+        assert value == want_value, (
+            f"{doc}: '{label}' says {value!r}, {RESULTS_TABLE.name} says "
+            f"{want_value!r}"
+        )
+        assert got_seeds == want_seeds, (
+            f"{doc}: '{label}' per-seed {got_seeds} != generated {want_seeds}"
+        )
+        checked.add(arm)
+
+    assert checked == set(gen), (
+        f"{doc} restates {sorted(checked)} but {RESULTS_TABLE.name} reports "
+        f"{sorted(gen)}; every reported arm should appear, and any label not "
+        "in LABEL_TO_ARM is silently skipped — add it there"
+    )
+
+
 def cited_result_paths(writeup: str) -> set[str]:
     """results/ paths the write-up references, in backticks or as image links."""
     cited = set(re.findall(r"`(results/[^`]+?)`", writeup))
