@@ -106,7 +106,7 @@ def main():
         # Wide and short on purpose: the write-up has a hard 4-page limit and
         # a figure's printed height is width x aspect. Widening rather than
         # scaling down keeps the tick and legend text at readable size.
-        fig, ax = plt.subplots(figsize=(9, 3.0))
+        fig, ax = plt.subplots(figsize=(9, 2.6))
         for (e, arm), runs in sorted(arms.items()):
             if e != env_id:
                 continue

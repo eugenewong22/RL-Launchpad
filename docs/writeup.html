@@ -171,7 +171,11 @@ does and does not license us to conclude.</p>
 <h2>3. Evidence</h2>
 <p><em>All numbers regenerate from committed CSVs via <code>scripts/make_plots.py</code>;
 eval protocol: deterministic policy, 50 episodes, eval seeds 10000–10049,
-disjoint from all training seeds (R4).</em></p>
+disjoint from all training seeds (R4). We score <code>checkpoint_best</code>, selected
+on in-training eval — so we checked that selection against a disjoint seed
+block: PickAndPlace seed 0 scores 0.740 on both 10000+ and 20000+, i.e. no
+selection leakage. Best-vs-final costs 0.740 against 0.68 there, and
+nothing on FetchPush (1.000 either way).</em></p>
 <p><strong>Correctness gate (FetchReach):</strong> first 10/10 in-training eval at 7.5k
 env steps, holding 10/10 for 17 of the 19 later evals (exceptions: 8/10 at
 10k, 9/10 at 47.5k — 10-episode samples, so noise, not regression), 1.9 min
@@ -262,12 +266,12 @@ at 1M steps (plateau 70–75%; grasping and in-air goals, so no pushing
 shortcut exists). One config transferring across two contact tasks is
 evidence the recipe, not per-task tuning, is doing the work.</p>
 <p><img alt="learning curves" src="../results/learning_curves.png" /></p>
-<p><strong>Reading the curves.</strong> Both working arms are flat at the floor while the
-buffer fills with relabeled failures, then rise sharply once HER has enough
-near-goal experience to bootstrap from. On the mean curve we hit 0.5 at
-390k env steps to SAC's 440k, and 0.9 at 550k to 670k — but we do <strong>not</strong>
-claim a sample-efficiency win, because per-seed steps to a durable 0.9
-(reached, never dropping below 0.8 again) don't support it:</p>
+<p><strong>Reading the curves.</strong> Both working arms sit at the floor while the buffer
+fills with relabeled failures, then rise sharply once HER has enough
+near-goal experience to bootstrap from. Our mean curve reaches every
+threshold above 0.5 first, but we do <strong>not</strong> claim a sample-efficiency win —
+per-seed steps to a durable 0.9 (reached, never falling below 0.8) don't
+support it:</p>
 <table>
 <thead>
 <tr>
@@ -295,14 +299,13 @@ claim a sample-efficiency win, because per-seed steps to a durable 0.9
 </tr>
 </tbody>
 </table>
-<p>SAC's <em>fastest</em> seed beats our fastest; our better mean rides on SAC's one
-slow seed, and the 120k gap in means is smaller than either arm's own
-spread, with the ±1σ bands overlapping across the whole rise. The
-defensible claim is that we <strong>match</strong> SAC+HER on final success and sample
-efficiency — n=3 cannot resolve a difference this size. One qualitative
-difference is real: SAC leaves the floor earlier (~150k vs ~250k) but climbs
-more gradually, crossing us around 400k — entropy-driven exploration versus
-a deterministic actor that needs its first successes before it commits.</p>
+<p>SAC's <em>fastest</em> seed beats our fastest; our better mean rides on its one slow
+seed, and the gap between means is smaller than either arm's own spread. We
+<strong>match</strong> SAC+HER on final success and sample efficiency alike — n=3 cannot
+resolve a difference this size. One qualitative difference is real: SAC
+leaves the floor earlier (~150k vs ~250k) but climbs more gradually,
+crossing us near 400k — entropy-driven exploration versus a deterministic
+actor that needs its first successes before it commits.</p>
 <h2>4. Constraints</h2>
 <ul>
 <li><strong>Compute honesty (R6):</strong> every arm ran 1M env steps — identical

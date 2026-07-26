@@ -80,7 +80,11 @@ does and does not license us to conclude.
 
 *All numbers regenerate from committed CSVs via `scripts/make_plots.py`;
 eval protocol: deterministic policy, 50 episodes, eval seeds 10000–10049,
-disjoint from all training seeds (R4).*
+disjoint from all training seeds (R4). We score `checkpoint_best`, selected
+on in-training eval — so we checked that selection against a disjoint seed
+block: PickAndPlace seed 0 scores 0.740 on both 10000+ and 20000+, i.e. no
+selection leakage. Best-vs-final costs 0.740 against 0.68 there, and
+nothing on FetchPush (1.000 either way).*
 
 **Correctness gate (FetchReach):** first 10/10 in-training eval at 7.5k
 env steps, holding 10/10 for 17 of the 19 later evals (exceptions: 8/10 at
@@ -151,26 +155,25 @@ evidence the recipe, not per-task tuning, is doing the work.
 
 ![learning curves](../results/learning_curves.png)
 
-**Reading the curves.** Both working arms are flat at the floor while the
-buffer fills with relabeled failures, then rise sharply once HER has enough
-near-goal experience to bootstrap from. On the mean curve we hit 0.5 at
-390k env steps to SAC's 440k, and 0.9 at 550k to 670k — but we do **not**
-claim a sample-efficiency win, because per-seed steps to a durable 0.9
-(reached, never dropping below 0.8 again) don't support it:
+**Reading the curves.** Both working arms sit at the floor while the buffer
+fills with relabeled failures, then rise sharply once HER has enough
+near-goal experience to bootstrap from. Our mean curve reaches every
+threshold above 0.5 first, but we do **not** claim a sample-efficiency win —
+per-seed steps to a durable 0.9 (reached, never falling below 0.8) don't
+support it:
 
 | Arm | seed 0 | seed 1 | seed 2 | spread |
 |---|---|---|---|---|
 | TD3+HER (ours) | 450k | 410k | 600k | 190k |
 | SAC+HER (SB3) | 380k | 760k | 650k | 380k |
 
-SAC's *fastest* seed beats our fastest; our better mean rides on SAC's one
-slow seed, and the 120k gap in means is smaller than either arm's own
-spread, with the ±1σ bands overlapping across the whole rise. The
-defensible claim is that we **match** SAC+HER on final success and sample
-efficiency — n=3 cannot resolve a difference this size. One qualitative
-difference is real: SAC leaves the floor earlier (~150k vs ~250k) but climbs
-more gradually, crossing us around 400k — entropy-driven exploration versus
-a deterministic actor that needs its first successes before it commits.
+SAC's *fastest* seed beats our fastest; our better mean rides on its one slow
+seed, and the gap between means is smaller than either arm's own spread. We
+**match** SAC+HER on final success and sample efficiency alike — n=3 cannot
+resolve a difference this size. One qualitative difference is real: SAC
+leaves the floor earlier (~150k vs ~250k) but climbs more gradually,
+crossing us near 400k — entropy-driven exploration versus a deterministic
+actor that needs its first successes before it commits.
 
 ## 4. Constraints
 

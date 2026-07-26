@@ -82,7 +82,7 @@ def main():
         raise SystemExit(f"{broken_root} not found — nothing to plot")
 
     # Wide/short to match make_plots.py — see the note there.
-    fig, ax = plt.subplots(figsize=(9, 3.0))
+    fig, ax = plt.subplots(figsize=(9, 2.6))
 
     for run, (label, color, dashes) in ARMS.items():
         csv_path = broken_root / run / "progress.csv"
