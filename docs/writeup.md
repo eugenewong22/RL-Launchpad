@@ -148,10 +148,12 @@ mislead a reader here, so we say plainly it isn't.
 
 **Beyond the protocol:** 599/600 held-out non-eval initial states solved
 across the three seeds — one failure total, dissected in §5. **Stretch
-task — FetchPickAndPlace**, same config, zero re-tuning: seed 0 = **0.740**
-at 1M steps (plateau 70–75%; grasping and in-air goals, so no pushing
-shortcut exists). One config transferring across two contact tasks is
-evidence the recipe, not per-task tuning, is doing the work.
+task — FetchPickAndPlace**, same config, zero re-tuning: **0.740 ± 0.082**
+over 3 seeds × 50 episodes (0.74/0.84/0.64; grasping and in-air goals, so no
+pushing shortcut exists). One config transferring across two contact tasks
+is evidence the recipe, not per-task tuning, is doing the work — though the
+±0.08 spread is three times FetchPush's, so the transfer is real but
+markedly less stable than the primary task.
 
 ![learning curves](../results/learning_curves.png)
 

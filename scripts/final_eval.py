@@ -58,8 +58,13 @@ def main():
         if not m:
             continue
         arm, seed = m.group(1), int(m.group(2))
-        if arm.startswith("probe"):
-            continue  # short diagnostic probes, not reported arms
+        # Reported arms only. Diagnostic probes are short throwaway runs;
+        # stabilizer-ablation arms are a different experiment that happens to
+        # share this env, and letting them into the R4 table would mean a
+        # judge re-running this script gets a different table than we report
+        # (results/stabilizer_ablation.md is where they belong).
+        if arm.startswith(("probe", "ablate")):
+            continue
         # Each run records its own env; --env-id filters which arms to score.
         with open(run_dir / "config.yaml") as f:
             run_cfg = yaml.safe_load(f)

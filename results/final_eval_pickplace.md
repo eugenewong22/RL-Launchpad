@@ -4,4 +4,4 @@
 
 | Arm | Seeds | Success rate (mean ± std) | Per-seed |
 |---|---|---|---|
-| pickplace_td3_her | 1 | 0.740 ± 0.000 | s0=0.74 |
+| pickplace_td3_her | 3 | 0.740 ± 0.082 | s0=0.74, s1=0.84, s2=0.64 |

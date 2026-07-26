@@ -1,7 +1,8 @@
 | Run | Task | Env steps | Wall-clock (min) |
 |---|---|---|---|
 | pickplace_td3_her_seed0 | FetchPickAndPlace-v4 | 1,000,000 | 45.9 |
-| pickplace_td3_her_seed1 | FetchPickAndPlace-v4 | 670,000 | 35.5 |
+| pickplace_td3_her_seed1 | FetchPickAndPlace-v4 | 1,000,000 | 54.1 |
+| pickplace_td3_her_seed2 | FetchPickAndPlace-v4 | 1,000,000 | 48.3 |
 | ablate_action_l2_seed0 | FetchPush-v4 | 1,000,000 | 43.6 |
 | ablate_expl_noise_seed0 | FetchPush-v4 | 1,000,000 | 39.5 |
 | ablate_normalize_obs_seed0 | FetchPush-v4 | 1,000,000 | 42.3 |
