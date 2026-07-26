@@ -6,15 +6,15 @@ The reported config deviates from SB3's published Fetch values in five places (`
 
 The reported config's own three seeds reach durable 0.9 at 410,000–600,000 steps. That band is the noise floor: with one seed per ablation arm, a result inside it is not evidence of an effect.
 
-| Reverted setting | Change | Success | Steps to 0.9 | Contact | Effect |
-|---|---|---|---|---|---|
-| *none (reported run)* | — | **1.000** | **450,000** | 0.97 | — |
-| `normalize_obs` | True → False | 0.920 | 910,000 | 0.98 | **slower** (2.0x) |
-| `expl_noise` | 0.2 → 0.1 | 1.000 | 600,000 | 0.97 | within seed noise |
-| `tau` | 0.05 → 0.005 | 1.000 | 390,000 | 0.97 | within seed noise |
-| `action_l2` | 1.0 → 0.0 | 1.000 | 350,000 | 0.98 | within seed noise |
-| `random_eps` | 0.3 → 0.0 | 0.050 | never | 0.03 | **collapses** |
-| *all five (archived)* | — | 0.050 | never | — | **collapses** |
+| Reverted setting | Change | n | Success | Steps to 0.9 | Contact | Effect |
+|---|---|---|---|---|---|---|
+| *none (reported run)* | — | 3 | **1.000** | **450,000** | 0.97 | — |
+| `normalize_obs` | True → False | 1 | 0.920 | 910,000 | 0.98 | **slower** (2.0x) |
+| `expl_noise` | 0.2 → 0.1 | 1 | 1.000 | 600,000 | 0.97 | within seed noise |
+| `tau` | 0.05 → 0.005 | 1 | 1.000 | 390,000 | 0.97 | within seed noise |
+| `action_l2` | 1.0 → 0.0 | 1 | 1.000 | 350,000 | 0.98 | within seed noise |
+| `random_eps` | 0.3 → 0.0 | 1 | 0.050 | **never** | 0.03 | **collapses** |
+| *all five (archived)* | — | 1 | 0.050 | never | — | **collapses** |
 
 `contact` is `contact_frac`, the fraction of episodes that moved the block — the mechanism signal, since the original campaign died with a saturated actor that never reached the block.
 

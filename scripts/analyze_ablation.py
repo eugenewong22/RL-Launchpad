@@ -28,9 +28,10 @@ STABILIZERS = ["action_l2", "normalize_obs", "tau", "expl_noise", "random_eps"]
 
 # train.py appends _seed<N> to run_dir when --seed is given without
 # --run-dir (see src/agent/train.py), so the configs' `results/ablate_<key>`
-# actually lands at `results/ablate_<key>_seed0`. Matching the repo's
-# existing <arm>_seed<k> convention.
-RUN_SUFFIX = "_seed0"
+# lands at `results/ablate_<key>_seed<N>`. Arms may have more than one seed:
+# the seed-0 sweep is the screen, and the arms that carried a result were
+# re-run on further seeds. Every seed present is used.
+RUN_GLOB = "ablate_{key}_seed*"
 
 # Final success within this margin of the reported run counts as "no effect".
 TOLERANCE = 0.10
@@ -111,22 +112,31 @@ def main():
     broken = read_final(res / BROKEN)
 
     rows, missing = [], []
+    base_cfg = yaml.safe_load((res / REPORTED / "config.yaml").read_text())
     for key in STABILIZERS:
-        run = res / f"ablate_{key}{RUN_SUFFIX}"
-        got = read_final(run)
-        if got is None:
+        found = [(d, read_final(d)) for d in sorted(res.glob(RUN_GLOB.format(key=key)))]
+        found = [(d, g) for d, g in found if g is not None]
+        if not found:
             missing.append(key)
             continue
-        base_cfg = yaml.safe_load((res / REPORTED / "config.yaml").read_text())
-        run_cfg = yaml.safe_load((run / "config.yaml").read_text())
-        drop = reported["success"] - got["success"]
+        run_cfg = yaml.safe_load((found[0][0] / "config.yaml").read_text())
+        succ = [g["success"] for _, g in found]
+        contacts = [g["contact"] for _, g in found if g["contact"] is not None]
+        reaches = [g["reach90"] for _, g in found]
         rows.append({
             "key": key,
             "from": base_cfg.get(key),
             "to": run_cfg.get(key),
-            **got,
-            "drop": drop,
-            "load_bearing": drop > TOLERANCE,
+            "n": len(found),
+            "success": sum(succ) / len(succ),
+            "contact": sum(contacts) / len(contacts) if contacts else None,
+            # None if ANY seed never got there: an arm that fails on even one
+            # seed is not reliably solving the task, and averaging over the
+            # seeds that happened to succeed would hide that.
+            "reach90": None if any(r is None for r in reaches)
+                       else sum(reaches) // len(reaches),
+            "reach_all": reaches,
+            "drop": reported["success"] - sum(succ) / len(succ),
         })
 
     # The reported config's own seed spread is the noise floor: with n=1 per
@@ -170,22 +180,34 @@ def main():
             "",
         ]
     lines += [
-        "| Reverted setting | Change | Success | Steps to 0.9 | Contact | Effect |",
-        "|---|---|---|---|---|---|",
-        f"| *none (reported run)* | — | **{reported['success']:.3f}** | "
+        "| Reverted setting | Change | n | Success | Steps to 0.9 | Contact | Effect |",
+        "|---|---|---|---|---|---|---|",
+        f"| *none (reported run)* | — | 3 | **{reported['success']:.3f}** | "
         f"**{reported['reach90']:,}** | {fmt(reported['contact'], '{:.2f}')} | — |",
     ]
     for r in sorted(rows, key=lambda r: -(r["reach90"] or 0)):
+        # Show every seed once an arm has more than one, so a mean can never
+        # stand in for a spread the reader cannot see.
+        if r["reach90"]:
+            reach = f"{r['reach90']:,}"
+            if r["n"] > 1:
+                reach += " (" + ", ".join(
+                    f"{v // 1000}k" if v else "never" for v in r["reach_all"]
+                ) + ")"
+        else:
+            reach = "**never**"
+            if r["n"] > 1:
+                reach += " (" + ", ".join(
+                    f"{v // 1000}k" if v else "never" for v in r["reach_all"]
+                ) + ")"
         lines.append(
-            f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['success']:.3f} | "
-            f"{r['reach90']:,} | {fmt(r['contact'], '{:.2f}')} | {verdict(r)} |"
-            if r["reach90"] else
-            f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['success']:.3f} | "
-            f"never | {fmt(r['contact'], '{:.2f}')} | **collapses** |"
+            f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['n']} | "
+            f"{r['success']:.3f} | {reach} | {fmt(r['contact'], '{:.2f}')} | "
+            f"{verdict(r)} |"
         )
     if broken:
         lines.append(
-            f"| *all five (archived)* | — | {broken['success']:.3f} | never | "
+            f"| *all five (archived)* | — | 1 | {broken['success']:.3f} | never | "
             f"{fmt(broken['contact'], '{:.2f}')} | **collapses** |"
         )
 
