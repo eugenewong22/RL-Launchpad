@@ -48,7 +48,7 @@ Each major decision, with the alternative we ruled out:
 | Decision | Why | Rejected alternative & its shortcoming |
 |---|---|---|
 | Off-policy + HER | Sparse goal-conditioned reward: relabeling failed episodes with achieved goals is the only signal source | PPO (on-policy): cannot reuse relabeled experience; dense shaping: reward engineering we'd have to defend per-task |
-| TD3 over SAC | Fewer moving parts under a deadline; deterministic eval | SAC: one more tunable (entropy temperature), stochastic eval adds R4 variance. **In hindsight, the costly choice** — a deterministic actor is exactly what saturates under sparse reward (§5), and SAC's entropy bonus is structurally immune. Same final performance, but SAC would have got there without the stabilizers below. |
+| TD3 over SAC | Fewer moving parts under a deadline; deterministic eval | SAC: one more tunable (entropy temperature), stochastic eval adds R4 variance. **In hindsight, the costly choice** — a deterministic actor is what saturates under sparse reward, and SAC's entropy bonus is structurally immune, which is why it needs no `random_eps` (§5). |
 | HER `future`, k=4 | Relabels 80% of sampled transitions from later same-episode states; the paper's strategy | `final`: fewer distinct goals per episode, weak coverage near trajectory ends |
 | MLP 256-256, relabel at sample time | State is 13-D — capacity isn't the bottleneck, stability is; sampling fresh counterfactual goals each epoch beats freezing k copies at store time (k× memory) | Deeper/wider nets: slower, no gain at this input size |
 | 1 grad step per env step | Matches SB3's throughput → fair same-x-axis comparison | Higher ratios: better sample efficiency, but confounds R2 |
@@ -64,8 +64,8 @@ into `results/config_diff.md`):
 | Key | Failed | Reported | Why |
 |---|---|---|---|
 | `tau` | 0.005 | **0.05** | 10× faster target tracking; slow targets let a saturated actor's value estimates stay self-consistent |
-| `action_l2` | — | **1.0** | penalizes squared action magnitude; intended as anti-saturation, but §5 finds it not individually necessary |
-| `normalize_obs` | — | **true** | Fetch positions and velocities differ by ~2 orders of magnitude |
+| `action_l2` | — | **1.0** | penalizes squared action magnitude; intended as anti-saturation, but §5 finds no individual effect |
+| `normalize_obs` | — | **true** | Fetch positions and velocities differ by ~2 orders of magnitude; §5 finds no individual effect (n=3) |
 | `expl_noise` | 0.1 | **0.2** | wider Gaussian exploration |
 | `random_eps` | — | **0.3** | 30% fully-random actions, sustained — **the one change §5's ablation shows is necessary** |
 
@@ -106,9 +106,8 @@ open-loop scripting should, on goals needing re-approach after overshoot.
 | Scripted classical controller | 0.54 | deterministic |
 
 Both floors are one fact at two sample sizes: 2 of the 50 R4 seeds start
-already inside the 5 cm threshold (0.040), as does 1 of the 20 in-training
-seeds (0.05, the floor in the figures) — a policy that never moves scores
-that, not zero.
+already inside the 5 cm threshold (0.040), as does 1 of 20 in-training
+(0.05, the floor in the figures). A policy that never moves scores that.
 
 Four results, each load-bearing:
 
@@ -193,9 +192,9 @@ a deterministic actor that needs its first successes before it commits.
   stochastic policy and tunes a temperature) — a consequence of the
   algorithm choice, not something we optimized for.
 - **Why CPU:** GPU dispatch measured slower for 256-wide MLPs at batch 256,
-  and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only
-  half the loop. 8 CPU cores per job; we report the choice rather than
-  assume more hardware would have helped.
+  and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only half
+  the loop. 8 cores per job; we report the choice rather than assume more
+  hardware would have helped.
 - **Control rate:** ~0.1 ms/action on CPU, far inside a 25 Hz budget.
 
 ## 5. Honesty & Trajectory
@@ -231,22 +230,25 @@ random actions).
 
 That diagnosis shaped the final design (§2) — and we then ablated it, one
 setting at a time (`results/stabilizer_ablation.md`). **Exactly one of the
-five is necessary.** Reverting `random_eps` alone puts the run back on the
-floor for all 1M steps at 3% object contact: the original failure
-reproduced by a one-line change. The other four are individually removable.
-Dropping observation normalization only doubles the cost — 910k steps to a
-durable 0.9 against the reported 450k — and `action_l2`, `tau` and
-`expl_noise` all land inside the reported config's own three-seed spread
-(410–600k), so at n=1 there is no evidence they matter alone.
+five is necessary.** Reverting `random_eps` puts the run back on the floor
+for all 1M steps at 4% object contact, on all three seeds: the original
+failure reproduced by a one-line change. The other four are individually
+removable — each lands inside the reported config's own three-seed spread
+(410–600k steps to a durable 0.9).
+
+One of those four is worth recounting. On seed 0, dropping observation
+normalization cost 910k steps — a clean 2× penalty, and what we first wrote
+down. Seeds 1 and 2 came back at 470k and 360k, inside the band and one
+faster than any reported seed, so we withdrew the claim. The number that
+suited us was the one that did not survive.
 
 Necessary is not sufficient: adding ε-random mixing to the *broken* config
 did not rescue it either (block moved in 0/50). It is required, and needs
 at least one of the others with it. The honest reading is that **we
-over-corrected** — five changes where the evidence supports one, plus one
-that buys sample efficiency. We report that rather than present the package
-as if it had been tuned. One seed per arm identifies a collapse, not small
-effects. The failed runs stay committed, and every figure here regenerates
-from their CSVs.
+over-corrected** — five changes where the evidence supports one. We report
+that rather than present the package as if it had been tuned. The three
+arms still at n=1 can identify a collapse but not a small regression. The
+failed runs stay committed, and every figure regenerates from their CSVs.
 
 **With two more weeks:** (1) the single-factor stabilizer sweep above;
 (2) PickAndPlace to 3 seeds — the code path is identical, only the config

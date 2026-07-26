@@ -95,7 +95,7 @@ entire extent of the library code (per R1).</p>
 <tr>
 <td>TD3 over SAC</td>
 <td>Fewer moving parts under a deadline; deterministic eval</td>
-<td>SAC: one more tunable (entropy temperature), stochastic eval adds R4 variance. <strong>In hindsight, the costly choice</strong> — a deterministic actor is exactly what saturates under sparse reward (§5), and SAC's entropy bonus is structurally immune. Same final performance, but SAC would have got there without the stabilizers below.</td>
+<td>SAC: one more tunable (entropy temperature), stochastic eval adds R4 variance. <strong>In hindsight, the costly choice</strong> — a deterministic actor is what saturates under sparse reward, and SAC's entropy bonus is structurally immune, which is why it needs no <code>random_eps</code> (§5).</td>
 </tr>
 <tr>
 <td>HER <code>future</code>, k=4</td>
@@ -140,13 +140,13 @@ into <code>results/config_diff.md</code>):</p>
 <td><code>action_l2</code></td>
 <td>—</td>
 <td><strong>1.0</strong></td>
-<td>penalizes squared action magnitude; intended as anti-saturation, but §5 finds it not individually necessary</td>
+<td>penalizes squared action magnitude; intended as anti-saturation, but §5 finds no individual effect</td>
 </tr>
 <tr>
 <td><code>normalize_obs</code></td>
 <td>—</td>
 <td><strong>true</strong></td>
-<td>Fetch positions and velocities differ by ~2 orders of magnitude</td>
+<td>Fetch positions and velocities differ by ~2 orders of magnitude; §5 finds no individual effect (n=3)</td>
 </tr>
 <tr>
 <td><code>expl_noise</code></td>
@@ -221,9 +221,8 @@ open-loop scripting should, on goals needing re-approach after overshoot.</p>
 </tbody>
 </table>
 <p>Both floors are one fact at two sample sizes: 2 of the 50 R4 seeds start
-already inside the 5 cm threshold (0.040), as does 1 of the 20 in-training
-seeds (0.05, the floor in the figures) — a policy that never moves scores
-that, not zero.</p>
+already inside the 5 cm threshold (0.040), as does 1 of 20 in-training
+(0.05, the floor in the figures). A policy that never moves scores that.</p>
 <p>Four results, each load-bearing:</p>
 <ol>
 <li><strong>We match the strongest library baseline and beat the classical one</strong>,
@@ -343,9 +342,9 @@ a deterministic actor that needs its first successes before it commits.</p>
   stochastic policy and tunes a temperature) — a consequence of the
   algorithm choice, not something we optimized for.
 - <strong>Why CPU:</strong> GPU dispatch measured slower for 256-wide MLPs at batch 256,
-  and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only
-  half the loop. 8 CPU cores per job; we report the choice rather than
-  assume more hardware would have helped.
+  and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only half
+  the loop. 8 cores per job; we report the choice rather than assume more
+  hardware would have helped.
 - <strong>Control rate:</strong> ~0.1 ms/action on CPU, far inside a 25 Hz budget.</p>
 <h2>5. Honesty &amp; Trajectory</h2>
 <p><strong>Known failure modes.</strong> Across <strong>600</strong> held-out initial states (env seeds
@@ -375,21 +374,23 @@ random actions).</p>
 <p><img alt="the campaign that failed" src="../results/negative_result.png" /></p>
 <p>That diagnosis shaped the final design (§2) — and we then ablated it, one
 setting at a time (<code>results/stabilizer_ablation.md</code>). <strong>Exactly one of the
-five is necessary.</strong> Reverting <code>random_eps</code> alone puts the run back on the
-floor for all 1M steps at 3% object contact: the original failure
-reproduced by a one-line change. The other four are individually removable.
-Dropping observation normalization only doubles the cost — 910k steps to a
-durable 0.9 against the reported 450k — and <code>action_l2</code>, <code>tau</code> and
-<code>expl_noise</code> all land inside the reported config's own three-seed spread
-(410–600k), so at n=1 there is no evidence they matter alone.</p>
+five is necessary.</strong> Reverting <code>random_eps</code> puts the run back on the floor
+for all 1M steps at 4% object contact, on all three seeds: the original
+failure reproduced by a one-line change. The other four are individually
+removable — each lands inside the reported config's own three-seed spread
+(410–600k steps to a durable 0.9).</p>
+<p>One of those four is worth recounting. On seed 0, dropping observation
+normalization cost 910k steps — a clean 2× penalty, and what we first wrote
+down. Seeds 1 and 2 came back at 470k and 360k, inside the band and one
+faster than any reported seed, so we withdrew the claim. The number that
+suited us was the one that did not survive.</p>
 <p>Necessary is not sufficient: adding ε-random mixing to the <em>broken</em> config
 did not rescue it either (block moved in 0/50). It is required, and needs
 at least one of the others with it. The honest reading is that <strong>we
-over-corrected</strong> — five changes where the evidence supports one, plus one
-that buys sample efficiency. We report that rather than present the package
-as if it had been tuned. One seed per arm identifies a collapse, not small
-effects. The failed runs stay committed, and every figure here regenerates
-from their CSVs.</p>
+over-corrected</strong> — five changes where the evidence supports one. We report
+that rather than present the package as if it had been tuned. The three
+arms still at n=1 can identify a collapse but not a small regression. The
+failed runs stay committed, and every figure regenerates from their CSVs.</p>
 <p><strong>With two more weeks:</strong> (1) the single-factor stabilizer sweep above;
 (2) PickAndPlace to 3 seeds — the code path is identical, only the config
 changes; (3) a vision-from-pixels variant, swapping the 13-D state for a

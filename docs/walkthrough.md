@@ -120,12 +120,20 @@ be claiming an experiment we didn't do."*
 **"You changed five things at once. Which one mattered?"**
 *"We ran that ablation — `results/stabilizer_ablation.md`, one arm per
 setting. Exactly one is necessary: sustained ε-random mixing. Revert
-`random_eps` to 0 and the run sits on the floor for all 1M steps at 3%
-contact, which is the original failure exactly. The other four you can
-remove individually and it still solves the task. Dropping observation
-normalization doubles the steps to a durable 0.9, 910k against 450k, but
-still gets there. So we over-corrected — and we say that rather than
-pretend the package was tuned."*
+`random_eps` to 0 and the run sits on the floor for all 1M steps at 4%
+contact, on all three seeds — the original failure exactly. The other four
+you can remove individually and it still solves the task. So we
+over-corrected, and we say that rather than pretend the package was
+tuned."*
+
+**"Anything in that ablation surprise you?"**
+*"Yes, and it cost us a claim. On seed 0, removing observation
+normalization took 910k steps to a durable 0.9 against the reported 450k —
+a clean 2× penalty, and we wrote it down. Seeds 1 and 2 came back at 470k
+and 360k, inside the reported config's own band and one of them faster
+than any reported seed. So we withdrew it. The write-up says so explicitly;
+it's the same reason we report the SB3 TD3 arm as a failed configuration
+rather than a win."*
 
 **"Then was your original diagnosis wrong?"**
 *"Partly, and we corrected the write-up. We'd described action-L2 as the

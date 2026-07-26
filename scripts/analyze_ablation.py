@@ -163,7 +163,9 @@ def main():
         "five at once, so `docs/writeup.md` §5 could report only that the "
         "package works. Each run below reverts exactly ONE setting to its "
         "`TrainConfig` default — the value the failed campaign used — holding "
-        "everything else at the reported config. Seed 0, 1M env steps.",
+        "everything else at the reported config. 1M env steps each. Seed 0 is "
+        "the screen; arms whose seed-0 result looked like an effect were "
+        "re-run on seeds 1 and 2 (the `n` column).",
         "",
         "**Read the third column, not the second.** Final success saturates: "
         "every single-factor arm reaches ~1.0 by 1M steps, so final success "
@@ -196,10 +198,12 @@ def main():
                 ) + ")"
         else:
             reach = "**never**"
-            if r["n"] > 1:
+            if r["n"] > 1 and any(r["reach_all"]):
                 reach += " (" + ", ".join(
                     f"{v // 1000}k" if v else "never" for v in r["reach_all"]
                 ) + ")"
+            elif r["n"] > 1:
+                reach += f" (all {r['n']} seeds)"
         lines.append(
             f"| `{r['key']}` | {r['from']!r} → {r['to']!r} | {r['n']} | "
             f"{r['success']:.3f} | {reach} | {fmt(r['contact'], '{:.2f}')} | "
@@ -274,10 +278,10 @@ def main():
     if noise:
         lines += [
             "**Not individually load-bearing:** "
-            + ", ".join(f"`{n['key']}`" for n in noise)
+            + ", ".join(f"`{n['key']}` (n={n['n']})" for n in noise)
             + f". Each lands inside the reported config's own seed spread "
-            f"({band[0]:,}–{band[1]:,} steps), so at n=1 there is no evidence "
-            "any of them changes the outcome on its own." if band else "",
+            f"({band[0]:,}–{band[1]:,} steps), so there is no evidence any of "
+            "them changes the outcome on its own." if band else "",
             "",
         ]
 
@@ -289,11 +293,13 @@ def main():
         "*working* config breaks it. Both are true: it is required, and it "
         "needs at least one of the others alongside it.",
         "",
-        f"Caveat: one seed per arm. That is enough to identify a collapse "
-        f"({collapsed[0]['key'] if len(collapsed) == 1 else 'above'} is "
-        "unambiguous — floor for 1M steps) and enough to rule out large "
-        "effects, but not to resolve small ones. Three seeds per arm would "
-        "settle the middle ground.",
+        "Caveat: the arms still at n=1 can identify a collapse but not resolve "
+        "a small regression. The one arm where a single seed *did* look like an "
+        "effect is instructive: reverting `normalize_obs` cost 910k steps on "
+        "seed 0, which read as a 2x sample-efficiency penalty — seeds 1 and 2 "
+        "then came back at 470k and 360k, inside the reported band and one of "
+        "them faster than any reported seed. We withdrew that claim rather than "
+        "keep the number that suited us.",
         "",
     ]
 
