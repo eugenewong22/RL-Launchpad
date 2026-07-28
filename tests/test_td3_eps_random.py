@@ -87,3 +87,28 @@ def test_matches_our_agents_semantics():
     # a saturated-policy draw would clump at the edges instead.
     assert abs(samples.mean()) < 0.1, samples.mean()
     assert samples.max() > 0.85 and samples.min() < -0.85
+
+
+def test_override_is_live_during_learn():
+    """The override must fire inside model.learn(), not just when called.
+
+    This is what makes a NEGATIVE result trustworthy. The experiment found
+    that adding epsilon-random to SB3's TD3 does not rescue it — a flat
+    curve. But a silently-inactive override produces an identical flat
+    curve, and the two conclusions are opposite: "the mechanism does not
+    help" vs "we never tested the mechanism". The unit tests above call
+    _sample_action directly; only this one proves SB3's training loop
+    actually routes through it.
+    """
+    model = make_model(0.3)
+    warmup = 200
+    model.learning_starts = warmup
+    total = 1200
+    model.learn(total_timesteps=total)
+
+    assert model.n_random_actions > 0, (
+        "the override never fired during learn() — any conclusion drawn from "
+        "the training curves would be about an experiment that did not run"
+    )
+    rate = model.n_random_actions / (total - warmup)
+    assert abs(rate - 0.3) < 0.08, f"fired at {rate:.3f}, configured 0.300"
