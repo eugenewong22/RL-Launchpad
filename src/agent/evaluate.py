@@ -46,13 +46,19 @@ def load_policy(checkpoint_path, env_id: str):
     return lambda obs: agent.select_action(concat_obs(obs), noise_std=0.0)
 
 
-def evaluate(policy_fn, env_id: str, n_episodes: int, eval_seed_base: int) -> dict:
+def evaluate(policy_fn, env_id: str, n_episodes: int, eval_seed_base: int,
+             make_env=None) -> dict:
     """policy_fn maps the raw goal-conditioned obs dict to an action.
 
     Taking a bare function (not an agent class) lets the from-scratch
     agent and the SB3 baseline run through this exact code path.
+
+    make_env optionally overrides how the env is constructed — used by the
+    dynamics sweep to wrap it in FixedDynamics. Everything downstream (seed
+    schedule, determinism, success criterion) stays identical, so a shifted
+    number is comparable to the reported one rather than merely similar.
     """
-    env = gym.make(env_id)
+    env = make_env() if make_env is not None else gym.make(env_id)
     successes, returns, seeds = [], [], []
     for i in range(n_episodes):
         seed = eval_seed_base + i
