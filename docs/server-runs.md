@@ -87,6 +87,10 @@ the right choice here, and why the cluster's value is running 12 arms
 
 ## Bringing results home
 
+`"$REPO"` below is your local clone — set it once with
+`REPO=$(git rev-parse --show-toplevel)` from inside the repo, rather than
+hardcoding a path (this checkout has already moved once).
+
 Each finished run is one self-contained directory: `progress.csv`,
 `config.yaml`, checkpoints, and `normalizer.npz`.
 
@@ -96,7 +100,7 @@ a `192.168.0/16` route that collides with a home router's subnet, so `ssh`
 to `xlogin1` times out even while the VPN reports "connected":
 
 ```bash
-rsync -av YOUR_NUS_USER@xlogin1.comp.nus.edu.sg:launchpad-rl/results/ ~/dev/launchpad-rl/results/
+rsync -av YOUR_NUS_USER@xlogin1.comp.nus.edu.sg:launchpad-rl/results/ "$REPO"/results/
 ```
 
 **Use GitHub as the rendezvous instead.** The cluster can reach GitHub even
@@ -130,7 +134,7 @@ Do not put the token in the remote URL — that writes it in cleartext into
 Then, on the laptop:
 
 ```bash
-cd ~/dev/launchpad-rl
+cd "$REPO"        # your local clone
 git pull --no-rebase          # merge, not rebase; see the gotcha below
 uv run python scripts/make_plots.py
 uv run python scripts/final_eval.py --env-id FetchPush-v4
