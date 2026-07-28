@@ -13,7 +13,7 @@ import gymnasium_robotics  # noqa: F401  (registers Fetch env IDs)
 import numpy as np
 import pytest
 
-from src.agent.domain_randomization import (
+from src.envs.domain_randomization import (
     DomainRandomizationSpec,
     DynamicsRandomization,
     FixedDynamics,

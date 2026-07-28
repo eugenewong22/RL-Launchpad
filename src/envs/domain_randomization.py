@@ -1,5 +1,9 @@
 """Dynamics randomization for the Fetch tasks (declared env modification, R5).
 
+Lives in src/envs/, not src/agent/: this perturbs the simulator, and
+src/agent/ is reserved for the from-scratch algorithm the R1 claim is
+about. Mixing env utilities in there would inflate that surface.
+
 Resamples the manipulated block's mass and sliding friction at every reset.
 The point is not a better FetchPush number — it is measuring whether the
 policy survives dynamics it never trained on, which is the honest sim-only
