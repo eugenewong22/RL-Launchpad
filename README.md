@@ -38,7 +38,7 @@ clean clone into an empty directory):
 | `git clone` (80 MB) | 14–36 s | 14–36 s |
 | `uv sync` | 10 s (792 MB of wheels downloaded) | 1 s |
 | `check_env.py` | 7 s | 7 s |
-| `pytest` (40 tests) | 15 s | 15 s |
+| `pytest` (full suite) | 15 s | 15 s |
 | 50-episode eval | 2 s | 2 s |
 | **total** | **~50–70 s** | **~40–60 s** |
 

@@ -195,7 +195,7 @@ actor that needs its first successes before it commits.
 - **Compute honesty (R6):** every arm ran 1M env steps — identical budgets,
   so the comparison is on equal terms. Wall-clock, CPU-only: ours 42 min on
   an M-series laptop and ~4.8 h per cluster seed, the SB3 arms 5.5–8.8 h;
-  per-run figures for all 20 runs in `results/compute_table.md`. Two honest
+  per-run figures for every run in `results/compute_table.md`. Two honest
   notes. The laptop core is ~3× faster than the cluster's older Xeons, so
   cross-hardware times are not comparable — env steps are the shared axis.
   And ours is the *cheapest* arm per env step (one deterministic actor, two
