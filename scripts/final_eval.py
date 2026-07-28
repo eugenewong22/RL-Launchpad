@@ -58,12 +58,15 @@ def main():
         if not m:
             continue
         arm, seed = m.group(1), int(m.group(2))
-        # Reported arms only. Diagnostic probes are short throwaway runs;
-        # stabilizer-ablation arms are a different experiment that happens to
-        # share this env, and letting them into the R4 table would mean a
-        # judge re-running this script gets a different table than we report
-        # (results/stabilizer_ablation.md is where they belong).
-        if arm.startswith(("probe", "ablate")):
+        # Reported arms only. Everything skipped here is a FetchPush run that
+        # would otherwise be swept into the headline R4 table, meaning a judge
+        # re-running this script gets a different table than we report:
+        #   probe*          short throwaway diagnostics
+        #   ablate*         the stabilizer ablation (results/stabilizer_ablation.md)
+        #   push_sb3_td3eps SB3's TD3 with OUR exploration added — a *modified*
+        #                   baseline, which must never sit in the same table as
+        #                   the published ones (results/sb3_eps_experiment.md)
+        if arm.startswith(("probe", "ablate", "push_sb3_td3eps")):
             continue
         # Each run records its own env; --env-id filters which arms to score.
         with open(run_dir / "config.yaml") as f:
