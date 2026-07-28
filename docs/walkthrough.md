@@ -113,9 +113,19 @@ not at either codebase. Our fair comparison is SAC+HER, and against it we
 match rather than beat."*
 
 **"Then would your five changes fix SB3's TD3?"**
-*"We don't know — we never ran it. The changes live in our training loop
-and porting them into SB3 was out of scope. Saying anything stronger would
-be claiming an experiment we didn't do."*
+*"We ran it, and no. We subclassed SB3's TD3 to add the one change our
+ablation says is necessary — sustained ε-random — leaving everything else
+at SB3's settings. All three seeds sit at the floor for 1M steps and never
+leave it. So ε-random is necessary for us but not sufficient for SB3, and
+the gap isn't only the exploration schedule. We don't know what else it is;
+the two remaining candidates are the mechanisms SB3 has no knob for, and
+our own ablation found neither individually necessary."*
+
+**"How do you know that null result isn't just a broken experiment?"**
+*"Because a dead override produces the identical flat curve, so we measured
+the mechanism firing inside SB3's training loop — 0.302 against 0.300
+configured — and there's a test that fails if it ever stops firing. That
+was written before the run, not after we saw the result."*
 
 **"You changed five things at once. Which one mattered?"**
 *"We ran that ablation — `results/stabilizer_ablation.md`, one arm per

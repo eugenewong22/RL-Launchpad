@@ -101,14 +101,16 @@ changed five things (`results/config_diff.md`), so we report that arm as a
 **failed baseline configuration**, not as a 20× win — see `docs/writeup.md`
 §3. FetchPickAndPlace, same config with zero re-tuning: **0.740 ± 0.082** (3 seeds: 0.74/0.84/0.64).
 Robustness: **599/600** held-out non-eval initial states across the three
-seeds (`results/failure_sweep.md`).
+seeds (`results/failure_sweep.md`), and — with no domain randomization in
+training — unchanged under 4× friction or an 8× heavier block, though a
+light block degrades it (`results/dynamics_sweep.md`).
 
 ## Rules mapping
 
 | Rule | Where |
 |---|---|
 | R1 from-scratch algorithm/networks | `src/agent/` only; `src/baseline/` is SB3 and clearly separated |
-| R2 published baseline, same protocol | `src/baseline/train_sb3.py`, evaluated through the same `src/agent/evaluate.evaluate`. **Two SB3 baselines**: SAC+HER (matches us — the operative comparison) and TD3+HER (did not learn in 1M steps at SB3's published settings). We report the TD3 arm as a failed baseline configuration, not as a win; see `docs/writeup.md` §3 |
+| R2 published baseline, same protocol | `src/baseline/train_sb3.py`, evaluated through the same `src/agent/evaluate.evaluate`. **Two SB3 baselines**: SAC+HER (matches us — the operative comparison) and TD3+HER (did not learn in 1M steps at SB3's published settings). We report the TD3 arm as a failed baseline configuration, not as a win; see `docs/writeup.md` §3. A third, **modified** arm (`src/baseline/td3_eps_random.py`) adds our ε-random exploration to SB3's TD3 to test whether that one mechanism explains its failure — it does not (`results/sb3_eps_experiment.md`). Kept out of the R4 table above precisely because it is modified |
 | R3 reproducibility | `uv.lock` pins exact versions; configs, seeds **and every reported checkpoint** committed; this quickstart. The full FetchPush table below was re-derived on a laptop from the committed checkpoints and matched the cluster's output exactly, arm for arm |
 | R4 standardized eval | **3 seeds × 50 episodes** on both FetchPush and FetchPickAndPlace, eval seeds `10000+i`, disjoint from training seeds. Scored on `checkpoint_best`; verified against a disjoint seed block (20000+) to rule out selection leakage — same 0.740. Demo clips render from the reported checkpoints on those seeds — except the labelled failure clip, drawn from a disjoint held-out block (2000+) because the reported 50 contain no seed-0 failure; stated on the clip and in `docs/writeup.md` §5 |
 | R5 simulation only, stock tasks | Unmodified `FetchReach-v4` / `FetchPush-v4` / `FetchPickAndPlace-v4` — no reward, observation, action-space, or terrain changes |

@@ -82,25 +82,24 @@ equivalent; §3 covers what that does and does not license us to conclude.
 *All numbers regenerate from committed CSVs via `scripts/make_plots.py`;
 eval protocol: deterministic policy, 50 episodes, eval seeds 10000–10049,
 disjoint from all training seeds (R4). We score `checkpoint_best`, selected
-on in-training eval — so we checked that selection against a disjoint seed
-block: PickAndPlace seed 0 scores 0.740 on both 10000+ and 20000+, i.e. no
-selection leakage. Best-vs-final costs 0.740 against 0.68 there, and
-nothing on FetchPush (1.000 either way).*
+on in-training eval, and checked that against a disjoint seed block —
+PickAndPlace seed 0 scores 0.740 on both 10000+ and 20000+, so no selection
+leakage. Best-vs-final costs it 0.740 vs 0.68, and nothing on FetchPush.*
 
-**Correctness gate (FetchReach):** first 10/10 in-training eval at 7.5k
-env steps, holding 10/10 for 17 of the 19 later evals (exceptions: 8/10 at
-10k, 9/10 at 47.5k — 10-episode samples, so noise, not regression), 1.9 min
-on laptop CPU. On the 50-episode R4 protocol the same checkpoint scores
-**0.98** — the gap from the 10-episode 1.00 is a live demonstration of why
-R4 mandates ≥50 episodes.
+**Correctness gate (FetchReach):** solved from 7.5k env steps, 1.9 min on
+laptop CPU. The same checkpoint scores **0.98** on the 50-episode R4
+protocol against 1.00 on the 10-episode in-training one — a live
+demonstration of why R4 mandates ≥50 episodes.
 
 **Classical baseline (scripted two-phase push controller,
-`scripts/diagnose_push.py`):** 54% on the identical 50-episode protocol —
-the "simple controller" bar, and not a trivial one: it fails exactly where
-open-loop scripting should, on goals needing re-approach after overshoot.
+`scripts/diagnose_push.py`):** 54% on the identical protocol — the simple
+controller bar, failing where open-loop scripting should, on goals needing
+re-approach after overshoot.
 
 **FetchPush, 3 seeds × 1M steps, on the R4 protocol**
-(`results/final_eval_push.md`):
+(`results/final_eval_push.md`; 0.040 is the floor — 2 of the 50 eval seeds
+start inside the 5 cm threshold, as does 1 of 20 in-training, hence 0.05 in
+the figures):
 
 | Arm | Success (mean ± std) | Per-seed |
 |---|---|---|
@@ -109,10 +108,6 @@ open-loop scripting should, on goals needing re-approach after overshoot.
 | TD3+HER (SB3 baseline) | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
 | TD3 no-HER (our ablation) | 0.040 ± 0.000 | 0.04, 0.04, 0.04 |
 | Scripted classical controller | 0.54 | deterministic |
-
-Both floors are one fact at two sample sizes: 2 of the 50 R4 seeds start
-already inside the 5 cm threshold (0.040), as does 1 of 20 in-training
-(0.05, the floor in the figures). A policy that never moves scores that.
 
 Four results, each load-bearing:
 
@@ -138,17 +133,34 @@ Four results, each load-bearing:
    baseline that works. That is the non-obvious insight this project
    produced, and it is why §2 records TD3-over-SAC as the costly choice.
 
-On the third point we claim only that the SB3 defaults do not train TD3+HER
-on FetchPush in 1M steps, and that two implementations agree on it. We do
-**not** claim our five changes would fix SB3's TD3+HER — we never ran that
-experiment. That arm is a *failed baseline configuration*, not an ablation
-of our additions, and the ~20× gap against it is **not** evidence that our
+That arm is a *failed baseline configuration*, not an ablation of our
+additions, and the ~20× gap against it is **not** evidence that our
 implementation beats TD3+HER as published. Our fair comparison is SAC+HER,
-which we match. Reporting the gap as a win would be the easiest way to
-mislead a reader here, so we say plainly it isn't.
+which we match; reporting the gap as a win would be the easiest way to
+mislead a reader here.
+
+**We tested the obvious follow-up, and it failed.** If ε-random is the one
+setting whose removal collapses us, does adding it to SB3's TD3 rescue it?
+We built exactly that — one mechanism added, everything else at SB3's
+settings — and the answer is **no**: all three seeds sit at the floor for 1M
+steps and never leave it (`results/sb3_eps_experiment.md`). ε-random is
+necessary for us but not sufficient for SB3, so the gap is not solely the
+exploration schedule, and we do not know what else it is. Since an inactive
+override would produce the same flat curve, we measured it firing inside
+SB3's loop (0.302 vs 0.300 configured) and pinned that with a test.
 
 **Beyond the protocol:** 599/600 held-out non-eval initial states solved
-across the three seeds — one failure total, dissected in §5. **Stretch
+across the three seeds — one failure total, dissected in §5.
+
+**Robustness to dynamics never trained on** (`results/dynamics_sweep.md`;
+stock-dynamics training, *no* randomization, so this is unaided). Re-running
+the R4 protocol under perturbed block physics shows a sharp asymmetry.
+Friction is nearly free — ×0.1 to ×1 leaves 0.993 untouched, ×4 costs 0.09.
+Mass is one-sided: **8× heavier** still scores 0.987, while lighter degrades
+monotonically (×0.5 → 0.867, ×0.3 → 0.240, ×0.2 → 0.073). The policy learned
+a push impulse calibrated to the nominal mass, and too much of it sends a
+light block past the goal — an *overshoot* failure, mechanically opposite to
+the seed-2081 case in §5. **Stretch
 task — FetchPickAndPlace**, same config, zero re-tuning: **0.740 ± 0.082**
 over 3 seeds × 50 episodes (0.74/0.84/0.64; grasping and in-air goals, so no
 pushing shortcut exists). One config transferring across two contact tasks
@@ -180,28 +192,20 @@ actor that needs its first successes before it commits.
 
 ## 4. Constraints
 
-- **Compute honesty (R6):** every arm ran 1M env steps — identical
-  budgets, so the comparison is on equal terms. Wall-clock (CPU-only
-  throughout; per-run hardware in `results/compute_table.md`):
-
-  | Arm | Wall-clock, 1M steps |
-  |---|---|
-  | TD3+HER (ours) | 42 min laptop (M-series) / ~4.8 h per cluster seed |
-  | TD3 no-HER (ours) | ~3.9–4.8 h per cluster seed |
-  | TD3+HER (SB3) | ~5.5–6.9 h |
-  | SAC+HER (SB3) | ~6.9–8.8 h |
-
-  Two honest notes. The laptop core is ~3× faster per-core than the
-  cluster's older Xeons, so cross-hardware times are not comparable — env
-  steps are the shared axis. And our agent is the *cheapest* arm per env
-  step (one deterministic actor, two critics; SAC also back-props a
-  stochastic policy and tunes a temperature) — a consequence of the
-  algorithm choice, not something we optimized for.
+- **Compute honesty (R6):** every arm ran 1M env steps — identical budgets,
+  so the comparison is on equal terms. Wall-clock, CPU-only: ours 42 min on
+  an M-series laptop and ~4.8 h per cluster seed, the SB3 arms 5.5–8.8 h;
+  per-run figures for all 20 runs in `results/compute_table.md`. Two honest
+  notes. The laptop core is ~3× faster than the cluster's older Xeons, so
+  cross-hardware times are not comparable — env steps are the shared axis.
+  And ours is the *cheapest* arm per env step (one deterministic actor, two
+  critics; SAC also back-props a stochastic policy and tunes a temperature)
+  — a consequence of the algorithm choice, not something we optimized for.
 - **Why CPU:** GPU dispatch measured slower for 256-wide MLPs at batch 256,
   and MuJoCo stepping is CPU-bound regardless, so a GPU accelerates only half
   the loop. 8 cores per job; we report the choice rather than assume more
   hardware would have helped.
-- **Control rate:** ~0.1 ms/action on CPU, far inside a 25 Hz budget.
+- **Control rate:** ~0.1 ms/action on CPU, inside a 25 Hz budget.
 
 ## 5. Honesty & Trajectory
 
@@ -256,13 +260,11 @@ that rather than present the package as if it had been tuned. The three
 arms still at n=1 can identify a collapse but not a small regression. The
 failed runs stay committed, and every figure regenerates from their CSVs.
 
-**With two more weeks:** (1) the single-factor stabilizer sweep above;
-(2) PickAndPlace to 3 seeds — the code path is identical, only the config
-changes; (3) a vision-from-pixels variant, swapping the 13-D state for a
-CNN encoder over rendered frames behind the same TD3+HER core, toward
-Griffin's VLA-style perception stack; (4) domain randomization (friction,
-block mass) plus actuation delay, to *quantify* the sim-to-real gap rather
-than assert it.
+**With two more weeks:** three seeds on each remaining ablation arm;
+*training* with domain randomization, which §3's sweep says would pay off
+only at low mass; and a vision-from-pixels variant, swapping the 13-D state
+for a CNN encoder behind the same TD3+HER core, toward Griffin's VLA-style
+perception stack.
 
 ---
 *Pinned deps (`uv.lock`), seeded configs, judge path in README; `src/agent/`

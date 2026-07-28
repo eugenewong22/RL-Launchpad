@@ -18,6 +18,9 @@
 | push_sb3_sac_seed0 | FetchPush-v4 | 1,000,000 | 522.4 |
 | push_sb3_sac_seed1 | FetchPush-v4 | 1,000,000 | 527.2 |
 | push_sb3_sac_seed2 | FetchPush-v4 | 1,000,000 | 413.0 |
+| push_sb3_td3eps_seed0 | FetchPush-v4 | 1,000,000 | 56.7 |
+| push_sb3_td3eps_seed1 | FetchPush-v4 | 1,000,000 | 60.7 |
+| push_sb3_td3eps_seed2 | FetchPush-v4 | 1,000,000 | 90.4 |
 | push_td3_her_seed0 | FetchPush-v4 | 1,000,000 | 42.2 |
 | push_td3_her_seed1 | FetchPush-v4 | 1,000,000 | 284.3 |
 | push_td3_her_seed2 | FetchPush-v4 | 1,000,000 | 286.3 |
