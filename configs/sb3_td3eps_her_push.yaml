@@ -1,0 +1,22 @@
+# SB3's TD3+HER with ONE addition: sustained epsilon-random exploration at
+# the same rate our own agent uses (random_eps: 0.3). Every other value is
+# identical to configs/sb3_td3_her_push.yaml, the published-settings arm
+# that flat-lines on all three seeds.
+#
+# This is the experiment docs/writeup.md section 3 declined to claim. Our
+# ablation (results/stabilizer_ablation.md) shows this is the one setting of
+# five whose removal collapses OUR agent; SB3's TD3 has no equivalent knob.
+# If adding it makes SB3's TD3 learn, the failure is an exploration-schedule
+# issue rather than anything about either codebase.
+#
+# A MODIFIED baseline. Never report it as "the SB3 baseline".
+algo: td3_eps
+env_id: FetchPush-v4
+eval_every: 10000
+expl_noise: 0.2
+her_k: 4
+n_eval_episodes: 20
+random_eps: 0.3
+run_dir: results/push_sb3_td3eps
+tau: 0.05
+total_env_steps: 1000000

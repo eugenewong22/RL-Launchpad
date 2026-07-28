@@ -32,9 +32,14 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.her import HerReplayBuffer
 
+from src.baseline.td3_eps_random import TD3EpsRandom
+
 from src.agent.evaluate import evaluate
 
-ALGOS = {"td3": TD3, "sac": SAC}
+# "td3_eps" is SB3's TD3 with ONE addition: our sustained epsilon-random
+# exploration (src/baseline/td3_eps_random.py). It is a modified baseline,
+# not a published one -- reported separately and never as "the SB3 baseline".
+ALGOS = {"td3": TD3, "sac": SAC, "td3_eps": TD3EpsRandom}
 
 
 @dataclass
@@ -49,6 +54,7 @@ class BaselineConfig:
     batch_size: int = 256
     buffer_capacity: int = 1_000_000
     expl_noise: float = 0.1
+    random_eps: float = 0.0  # td3_eps only: sustained fully-random action rate
     learning_starts: int = 1_000
     eval_every: int = 10_000
     n_eval_episodes: int = 20
@@ -109,7 +115,9 @@ def run_baseline(cfg: BaselineConfig) -> None:
     n_actions = env.action_space.shape[0]
     algo_cls = ALGOS[cfg.algo]
     kwargs = {}
-    if cfg.algo == "td3":  # SAC explores via its stochastic policy instead
+    if cfg.algo == "td3_eps":
+        kwargs["random_eps"] = cfg.random_eps
+    if cfg.algo.startswith("td3"):  # SAC explores via its stochastic policy instead
         kwargs["action_noise"] = NormalActionNoise(
             np.zeros(n_actions), cfg.expl_noise * np.ones(n_actions)
         )

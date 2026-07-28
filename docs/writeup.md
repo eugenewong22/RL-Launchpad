@@ -72,9 +72,10 @@ into `results/config_diff.md`):
 γ=0.95, lr=1e-3, batch 256, buffer 1e6, network width, policy delay and
 target-noise clipping are unchanged from SB3. Every reported from-scratch
 run — three FetchPush seeds, the no-HER ablation, PickAndPlace — uses this
-identical config; nothing was tuned per task or per seed. These five are
-*ours*, so the SB3 TD3+HER baseline does not have them; §3 covers what that
-does and does not license us to conclude.
+identical config; nothing was tuned per task or per seed. The SB3 TD3+HER
+baseline was given two of the five — `tau` and `expl_noise`, the only two
+it exposes — so it differs from us in exactly the three with no SB3
+equivalent; §3 covers what that does and does not license us to conclude.
 
 ## 3. Evidence
 
